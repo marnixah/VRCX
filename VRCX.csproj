@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>
@@ -101,19 +101,12 @@
     <Compile Include="SQLite.cs" />
     <Compile Include="SharedVariable.cs" />
     <Compile Include="Util.cs" />
-    <Compile Include="VRForm.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="VRForm.Designer.cs">
-      <DependentUpon>VRForm.cs</DependentUpon>
-    </Compile>
     <Compile Include="MainForm.cs">
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="MainForm.Designer.cs">
       <DependentUpon>MainForm.cs</DependentUpon>
     </Compile>
-    <Compile Include="VRCXVR.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="LogWatcher.cs" />
@@ -125,9 +118,6 @@
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="WinformThemer.cs" />
-    <EmbeddedResource Include="VRForm.resx">
-      <DependentUpon>VRForm.cs</DependentUpon>
-    </EmbeddedResource>
     <EmbeddedResource Include="MainForm.resx">
       <DependentUpon>MainForm.cs</DependentUpon>
     </EmbeddedResource>
@@ -177,13 +167,13 @@
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="CefSharp.Common">
-      <Version>107.1.120</Version>
+      <Version>104.4.240</Version>
     </PackageReference>
     <PackageReference Include="CefSharp.OffScreen">
-      <Version>107.1.120</Version>
+      <Version>104.4.240</Version>
     </PackageReference>
     <PackageReference Include="CefSharp.WinForms">
-      <Version>107.1.120</Version>
+      <Version>104.4.240</Version>
     </PackageReference>
     <PackageReference Include="DiscordRichPresence">
       <Version>1.1.3.18</Version>

@@ -213,38 +213,6 @@ namespace VRCX
             }
         }
 
-        public void ShowVRForm()
-        {
-            try
-            {
-                MainForm.Instance.BeginInvoke(new MethodInvoker(() =>
-                {
-                    if (VRForm.Instance == null)
-                    {
-                        new VRForm().Show();
-                    }
-                }));
-            }
-            catch
-            {
-            }
-        }
-
-        public void SetVR(bool active, bool hmdOverlay, bool wristOverlay, bool menuButton, int overlayHand)
-        {
-            VRCXVR.Instance.SetActive(active, hmdOverlay, wristOverlay, menuButton, overlayHand);
-        }
-
-        public void RefreshVR()
-        {
-            VRCXVR.Instance.Refresh();
-        }
-
-        public string[][] GetVRDevices()
-        {
-            return VRCXVR.Instance.GetDevices();
-        }
-
         public float CpuUsage()
         {
             return CpuMonitor.Instance.CpuUsage;
@@ -361,18 +329,6 @@ namespace VRCX
         {
             if (MainForm.Instance != null)
                 MainForm.Instance.Browser.ExecuteScriptAsync($"$app.{function}", json);
-        }
-
-        public void ExecuteVrFeedFunction(string function, string json)
-        {
-            if (VRCXVR._browser1 != null)
-                VRCXVR._browser1.ExecuteScriptAsync($"$app.{function}", json);
-        }
-
-        public void ExecuteVrOverlayFunction(string function, string json)
-        {
-            if (VRCXVR._browser2 != null)
-                VRCXVR._browser2.ExecuteScriptAsync($"$app.{function}", json);
         }
 
         public string GetLaunchCommand()

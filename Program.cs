@@ -18,6 +18,7 @@ namespace VRCX
         public static string Version { get; private set; }
         public static bool LaunchDebug;
         public static bool GPUFix;
+
         static Program()
         {
             BaseDirectory = AppDomain.CurrentDomain.BaseDirectory;
@@ -87,10 +88,8 @@ namespace VRCX
 
             CefService.Instance.Init();
             IPCServer.Instance.Init();
-            VRCXVR.Instance.Init();
             Application.Run(new MainForm());
             WebApi.Instance.SaveCookies();
-            VRCXVR.Instance.Exit();
             CefService.Instance.Exit();
 
             LogWatcher.Instance.Exit();
