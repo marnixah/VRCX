@@ -3,9 +3,9 @@
 [![GitHub Workflow Status](https://github.com/pypy-vrc/VRCX/actions/workflows/github_actions.yml/badge.svg)](https://github.com/pypy-vrc/VRCX/actions/workflows/github_actions.yml)
 [![VRCX Discord Invite](https://img.shields.io/discord/854071236363550763?color=%237289DA&logo=discord&logoColor=white)](https://vrcx.pypy.moe/discord)
 
-VRCX is an assistant application for VRChat that provides information about and managing friendship. This application uses the unofficial VRChat API (VRCSDK).
+VRCX is an assistant application for VRChat that provides information about and managing friendship. This application makes use of the unofficial VRChat API SDK.
 
-VRCX isn't endorsed by VRChat and doesn't reflect the views or opinions of VRChat or anyone officially involved in producing or managing VRChat. VRChat is trademark of VRChat Inc. VRChat © VRChat Inc.
+VRCX is not endorsed by VRChat and does not reflect the views or opinions of VRChat or anyone officially involved in producing or managing VRChat properties. VRChat and all associated properties are trademarks or registered trademarks of VRChat Inc. VRChat © VRChat Inc.
 
 pypy & Natsumi are not responsible for any problems caused by VRCX. **_Use at your own risk!_**
 
@@ -164,6 +164,7 @@ This can be caused by a many different things here's a list of things to try:
 - Browse to `%AppData%\VRCX\` then select `VRCX.sqlite3`.
 - File > Export > Database to SQL file...
 - Click Save and place the file somewhere.
+- File > Close Database
 - Rename `VRCX.sqlite3` in `%AppData%\VRCX\` to something like `Backup.sqlite3`.
 - File > Import > Database from SQL file...
 - Click Yes to creating a new database.

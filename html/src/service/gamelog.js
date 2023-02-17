@@ -18,11 +18,11 @@ class GameLogService {
                 break;
 
             case 'player-joined':
-                gameLog.userDisplayName = args[0];
+                gameLog.displayName = args[0];
                 break;
 
             case 'player-left':
-                gameLog.userDisplayName = args[0];
+                gameLog.displayName = args[0];
                 break;
 
             case 'notification':
@@ -56,6 +56,10 @@ class GameLogService {
             case 'photon-id':
                 gameLog.displayName = args[0];
                 gameLog.photonId = args[1];
+                break;
+
+            case 'screenshot':
+                gameLog.screenshotPath = args[0];
                 break;
 
             case 'vrc-quit':

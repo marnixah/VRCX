@@ -203,7 +203,7 @@ button {
 .x-container {
     position: relative;
     flex: none;
-    padding: 10px;
+    padding: 2px 10px 0 10px;
     overflow: hidden;
 }
 
@@ -255,11 +255,15 @@ button {
     font-weight: bold;
 }
 
-.x-friend-item.friend .name {
+.item .name {
+    color: #c5c5c5;
+}
+
+.friend .name {
     color: #fff;
 }
 
-.x-friend-item.favorite .name {
+.favorite .name {
     color: #ff0;
 }
 
@@ -316,7 +320,7 @@ i.x-user-status {
 }
 
 i.x-user-status.active {
-    background: #dfca43;
+    background: #f4e05e;
 }
 
 i.x-user-status.online {
@@ -328,11 +332,11 @@ i.x-user-status.joinme {
 }
 
 i.x-user-status.askme {
-    background: #fd9200;
+    background: #ff9500;
 }
 
 i.x-user-status.busy {
-    background: #f56c6c;
+    background: #ff2c2c;
 }
 
 .spin {
@@ -395,4 +399,16 @@ i.x-user-status.busy {
     position: absolute;
     right: -160px;
     bottom: 0;
+}
+
+.tracker-container {
+    flex: 1 1 auto;
+    text-align: center;
+    line-height: 18px;
+    width: 55px;
+}
+
+.tracker-device img {
+    width: 32px;
+    height: 32px;
 }

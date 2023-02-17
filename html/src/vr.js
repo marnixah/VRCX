@@ -8,10 +8,11 @@ import '@fontsource/noto-sans-kr';
 import '@fontsource/noto-sans-jp';
 import Noty from 'noty';
 import Vue from 'vue';
+import VueI18n from 'vue-i18n';
 import ElementUI from 'element-ui';
-import locale from 'element-ui/lib/locale/lang/en';
 import * as workerTimers from 'worker-timers';
 import MarqueeText from 'vue-marquee-text-component';
+import * as localizedStrings from './localization/localizedStrings.js';
 Vue.component('marquee-text', MarqueeText);
 
 (async function () {
@@ -29,8 +30,18 @@ Vue.component('marquee-text', MarqueeText);
         timeout: 3000
     });
 
+    Vue.use(VueI18n);
+
+    var i18n = new VueI18n({
+        locale: 'en',
+        fallbackLocale: 'en',
+        messages: localizedStrings
+    });
+
+    // var $t = i18n.t.bind(i18n);
+
     Vue.use(ElementUI, {
-        locale
+        i18n: (key, value) => i18n.t(key, value)
     });
 
     var escapeTag = (s) =>
@@ -79,9 +90,9 @@ Vue.component('marquee-text', MarqueeText);
 
     Vue.component('location', {
         template:
-            '<span><span style="margin-right:5px">{{ text }}</span>' +
-            '<span v-if="groupName" style="margin-right:5px">{{ groupName }}</span>' +
-            '<span class="flags" :class="region" style="display:inline-block;margin-bottom:2px"></span>' +
+            '<span><span>{{ text }}</span>' +
+            '<span v-if="groupName">({{ groupName }})</span>' +
+            '<span class="flags" :class="region" style="display:inline-block;margin-bottom:2px;margin-left:5px"></span>' +
             '<i v-if="strict" class="el-icon el-icon-lock" style="display:inline-block;margin-left:5px"></i></span>',
         props: {
             location: String,
@@ -163,10 +174,12 @@ Vue.component('marquee-text', MarqueeText);
     };
 
     var $app = {
+        i18n,
         data: {
             // 1 = 대시보드랑 손목에 보이는거
             // 2 = 항상 화면에 보이는 거
             appType: location.href.substr(-1),
+            appLanguage: 'en',
             currentTime: new Date().toJSON(),
             cpuUsage: 0,
             pcUptime: '',
@@ -193,7 +206,8 @@ Vue.component('marquee-text', MarqueeText);
             lastLocationTimer: '',
             onlineForTimer: '',
             wristFeed: [],
-            devices: []
+            devices: [],
+            deviceCount: 0
         },
         computed: {},
         methods: {},
@@ -310,6 +324,8 @@ Vue.component('marquee-text', MarqueeText);
         this.hudFeed = [];
         this.hudTimeout = [];
         this.setDatetimeFormat();
+        this.setAppLanguage(this.config.appLanguage);
+        this.updateFeedLength();
     };
 
     $app.methods.updateOnlineFriendCount = function (count) {
@@ -333,6 +349,7 @@ Vue.component('marquee-text', MarqueeText);
                 circle.style.opacity = 0;
             }
         }
+        this.updateFeedLength();
     };
 
     $app.methods.lastLocationUpdate = function (json) {
@@ -341,6 +358,26 @@ Vue.component('marquee-text', MarqueeText);
 
     $app.methods.wristFeedUpdate = function (json) {
         this.wristFeed = JSON.parse(json);
+        this.updateFeedLength();
+    };
+
+    $app.methods.updateFeedLength = function () {
+        if (this.appType === '2' || this.wristFeed.length === 0) {
+            return;
+        }
+        var length = 16;
+        if (!this.config.hideDevicesFromFeed) {
+            length -= 2;
+            if (this.deviceCount > 8) {
+                length -= 1;
+            }
+        }
+        if (this.nowPlaying.playing) {
+            length -= 1;
+        }
+        if (length < this.wristFeed.length) {
+            this.wristFeed.length = length;
+        }
     };
 
     $app.methods.updateStatsLoop = async function () {
@@ -379,13 +416,54 @@ Vue.component('marquee-text', MarqueeText);
 
             if (!this.config.hideDevicesFromFeed) {
                 AppApi.GetVRDevices().then((devices) => {
+                    var deviceList = [];
+                    var baseStations = 0;
                     devices.forEach((device) => {
-                        device[2] = parseInt(device[2], 10);
+                        device[3] = parseInt(device[3], 10);
+                        if (device[0] === 'base' && device[1] === 'connected') {
+                            baseStations++;
+                        } else {
+                            deviceList.unshift(device);
+                        }
                     });
-                    this.devices = devices;
+                    this.deviceCount = deviceList.length;
+                    deviceList.sort((a, b) => {
+                        if (a[0] === b[0]) {
+                            return 0;
+                        }
+                        if (a[0] === 'tracker' || a[0] === 'base') {
+                            return 1;
+                        }
+                        if (a[0].toLowerCase().includes('controller')) {
+                            return -1;
+                        }
+                        return 0;
+                    });
+                    deviceList.sort((a, b) => {
+                        if (a[1] === b[1]) {
+                            return 0;
+                        }
+                        if (a[1] === 'connected') {
+                            return -1;
+                        }
+                        if (a[1] === 'disconnected') {
+                            return 1;
+                        }
+                        return 0;
+                    });
+                    if (baseStations > 0) {
+                        deviceList.push([
+                            'base',
+                            'connected',
+                            '',
+                            baseStations
+                        ]);
+                        this.deviceCount += 1;
+                    }
+                    this.devices = deviceList;
                 });
             } else {
-                this.devices = '';
+                this.devices = [];
             }
             if (this.config.pcUptimeOnFeed) {
                 AppApi.GetUptime().then((uptime) => {
@@ -402,6 +480,7 @@ Vue.component('marquee-text', MarqueeText);
 
     $app.methods.playNoty = function (json) {
         var {noty, message, image} = JSON.parse(json);
+        var message = escapeTag(message);
         var text = '';
         var img = '';
         if (image) {
@@ -422,7 +501,7 @@ Vue.component('marquee-text', MarqueeText);
                     noty.displayName
                 }</strong> is in ${this.displayLocation(
                     noty.location,
-                    noty.worldName
+                    escapeTag(noty.worldName)
                 )}`;
                 break;
             case 'Online':
@@ -430,7 +509,7 @@ Vue.component('marquee-text', MarqueeText);
                 if (noty.worldName) {
                     locationName = ` to ${this.displayLocation(
                         noty.location,
-                        noty.worldName
+                        escapeTag(noty.worldName)
                     )}`;
                 }
                 text = `<strong>${noty.displayName}</strong> has logged in${locationName}`;
@@ -439,14 +518,16 @@ Vue.component('marquee-text', MarqueeText);
                 text = `<strong>${noty.displayName}</strong> has logged out`;
                 break;
             case 'Status':
-                text = `<strong>${noty.displayName}</strong> status is now <i>${noty.status}</i> ${noty.statusDescription}`;
+                text = `<strong>${noty.displayName}</strong> status is now <i>${
+                    noty.status
+                }</i> ${escapeTag(noty.statusDescription)}`;
                 break;
             case 'invite':
                 text = `<strong>${
                     noty.senderUsername
                 }</strong> has invited you to ${this.displayLocation(
                     noty.details.worldId,
-                    noty.details.worldName
+                    escapeTag(noty.details.worldName)
                 )}${message}`;
                 break;
             case 'requestInvite':
@@ -474,16 +555,16 @@ Vue.component('marquee-text', MarqueeText);
                 text = `<strong>${noty.previousDisplayName}</strong> changed their name to ${noty.displayName}`;
                 break;
             case 'group.announcement':
-                text = noty.message;
+                text = escapeTag(noty.message);
                 break;
             case 'group.informative':
-                text = noty.message;
+                text = escapeTag(noty.message);
                 break;
             case 'group.invite':
-                text = noty.message;
+                text = escapeTag(noty.message);
                 break;
             case 'group.joinRequest':
-                text = noty.message;
+                text = escapeTag(noty.message);
                 break;
             case 'PortalSpawn':
                 if (noty.displayName) {
@@ -491,23 +572,29 @@ Vue.component('marquee-text', MarqueeText);
                         noty.displayName
                     }</strong> has spawned a portal to ${this.displayLocation(
                         noty.instanceId,
-                        noty.worldName
+                        escapeTag(noty.worldName)
                     )}`;
                 } else {
                     text = 'User has spawned a portal';
                 }
                 break;
             case 'AvatarChange':
-                text = `<strong>${noty.displayName}</strong> changed into avatar ${noty.name}`;
+                text = `<strong>${
+                    noty.displayName
+                }</strong> changed into avatar ${escapeTag(noty.name)}`;
                 break;
             case 'ChatBoxMessage':
-                text = `<strong>${noty.displayName}</strong> said ${noty.text}`;
+                text = `<strong>${noty.displayName}</strong> said ${escapeTag(
+                    noty.text
+                )}`;
                 break;
             case 'Event':
-                text = noty.data;
+                text = escapeTag(noty.data);
                 break;
             case 'VideoPlay':
-                text = `<strong>Now playing:</strong> ${noty.notyName}`;
+                text = `<strong>Now playing:</strong> ${escapeTag(
+                    noty.notyName
+                )}`;
                 break;
             case 'BlockedOnPlayerJoined':
                 text = `Blocked user <strong>${noty.displayName}</strong> has joined`;
@@ -664,6 +751,16 @@ Vue.component('marquee-text', MarqueeText);
                 .replace(' pm', '');
         };
         Vue.filter('formatDate', formatDate);
+    };
+
+    $app.methods.setAppLanguage = function (appLanguage) {
+        if (!appLanguage) {
+            return;
+        }
+        if (appLanguage !== this.appLanguage) {
+            this.appLanguage = appLanguage;
+            i18n.locale = this.appLanguage;
+        }
     };
 
     $app = new Vue($app);

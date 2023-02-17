@@ -1,4 +1,5 @@
 using CefSharp;
+using CefSharp.SchemeHandler;
 using CefSharp.WinForms;
 using System;
 using System.IO;
@@ -20,31 +21,38 @@ namespace VRCX
             {
                 CachePath = Path.Combine(Program.AppDataDirectory, "cache"),
                 UserDataPath = Path.Combine(Program.AppDataDirectory, "userdata"),
-                IgnoreCertificateErrors = true,
                 LogSeverity = LogSeverity.Disable,
                 WindowlessRenderingEnabled = true,
                 PersistSessionCookies = true,
                 PersistUserPreferences = true
             };
-
-            /*cefSettings.RegisterScheme(new CefCustomScheme
+            
+            cefSettings.RegisterScheme(new CefCustomScheme
             {
-                SchemeName = "vrcx",
-                DomainName = "app",
-                SchemeHandlerFactory = new FolderSchemeHandlerFactory(Application.StartupPath + "/../../../html")
-            });*/
+                SchemeName = "file",
+                DomainName = "vrcx",
+                SchemeHandlerFactory = new FolderSchemeHandlerFactory(
+                    rootFolder: Path.Combine(Program.BaseDirectory, "html"),
+                    schemeName: "file",
+                    defaultPage: "index.html"
+                ),
+                IsLocal = true
+            });
 
+            // cefSettings.CefCommandLineArgs.Add("allow-universal-access-from-files");
             // cefSettings.CefCommandLineArgs.Add("ignore-certificate-errors");
-            cefSettings.CefCommandLineArgs.Add("disable-plugins");
+            // cefSettings.CefCommandLineArgs.Add("disable-plugins");
             cefSettings.CefCommandLineArgs.Add("disable-spell-checking");
             cefSettings.CefCommandLineArgs.Add("disable-pdf-extension");
             cefSettings.CefCommandLineArgs.Add("disable-extensions");
             cefSettings.CefCommandLineArgs["autoplay-policy"] = "no-user-gesture-required";
-            // cefSettings.CefCommandLineArgs.Add("allow-universal-access-from-files");
             cefSettings.CefCommandLineArgs.Add("disable-web-security");
             cefSettings.SetOffScreenRenderingBestPerformanceArgs();
 
-            CefSharpSettings.WcfEnabled = true; // TOOD: REMOVE THIS LINE YO
+            if (Program.LaunchDebug)
+                cefSettings.RemoteDebuggingPort = 8088;
+
+            CefSharpSettings.WcfEnabled = true; // TOOD: REMOVE THIS LINE YO (needed for synchronous configRepository)
             CefSharpSettings.ShutdownOnExit = false;
 
             // Enable High-DPI support on Windows 7 or newer
