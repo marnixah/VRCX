@@ -412,7 +412,11 @@ speechSynthesis.getVoices();
                 if (response.status === 200) {
                     this.$throw(0, 'Invalid JSON response');
                 }
-                if (response.status === 504 || response.status === 502) {
+                if (
+                    response.status === 504 ||
+                    response.status === 502 ||
+                    response.status === 429
+                ) {
                     // ignore expected API errors
                     throw new Error(
                         `${response.status}: ${response.data} ${endpoint}`
@@ -917,7 +921,7 @@ speechSynthesis.getVoices();
                 this.region = '';
                 if ($app.isRealInstance(instanceId)) {
                     this.region = L.region;
-                    if (!L.region) {
+                    if (!L.region && L.instanceId) {
                         this.region = 'us';
                     }
                 }
@@ -9301,7 +9305,7 @@ speechSynthesis.getVoices();
                 }
                 break;
             case 'screenshot':
-                if (!this.isGameRunning || !this.screenshotHelper) {
+                if (!this.screenshotHelper) {
                     break;
                 }
                 // var entry = {
@@ -9322,8 +9326,8 @@ speechSynthesis.getVoices();
                         displayName: API.currentUser.displayName
                     },
                     world: {
-                        id: location.worldId,
                         name: this.lastLocation.name,
+                        id: location.worldId,
                         instanceId: this.lastLocation.location
                     },
                     players: []
@@ -20028,6 +20032,56 @@ speechSynthesis.getVoices();
             'VRCX_screenshotHelperModifyFilename',
             this.screenshotHelperModifyFilename
         );
+    };
+
+    /**
+     * This function should only ever be called by .NET
+     * Function receives an unmodified json string grabbed from the screenshot file
+     * Error checking and and verification of data is done in .NET already; In the case that the data/file is invalid, a JSON object with the token "error" will be returned containing a description of the problem.
+     * Example: {"error":"Invalid file selected. Please select a valid VRChat screenshot."}
+     * See docs/screenshotMetadata.json for schema
+     * @param {string} metadata - JSON string grabbed from PNG file
+     */
+    $app.methods.displayScreenshotMetadata = function (metadata) {
+        var D = this.screenshotMetadataDialog;
+        var json = JSON.parse(metadata);
+        console.log(json);
+        D.metadata = json;
+        this.showScreenshotMetadataDialog();
+    };
+
+    $app.data.screenshotMetadataDialog = {
+        visible: false,
+        metadata: {}
+    };
+
+    $app.methods.showScreenshotMetadataDialog = function () {
+        this.$nextTick(() =>
+            adjustDialogZ(this.$refs.screenshotMetadataDialog.$el)
+        );
+        var D = this.screenshotMetadataDialog;
+        D.visible = true;
+    };
+
+    $app.methods.screenshotMetadataCarouselChange = function (index) {
+        var D = this.screenshotMetadataDialog;
+        if (index === 0) {
+            if (D.metadata.previousFilePath) {
+                AppApi.GetScreenshotMetadata(D.metadata.previousFilePath);
+            } else {
+                AppApi.GetScreenshotMetadata(D.metadata.filePath);
+            }
+        }
+        if (index === 2) {
+            if (D.metadata.nextFilePath) {
+                AppApi.GetScreenshotMetadata(D.metadata.nextFilePath);
+            } else {
+                AppApi.GetScreenshotMetadata(D.metadata.filePath);
+            }
+        }
+        if (typeof this.$refs.screenshotMetadataCarousel !== 'undefined') {
+            this.$refs.screenshotMetadataCarousel.setActiveItem(1);
+        }
     };
 
     // YouTube API
