@@ -5677,10 +5677,7 @@ speechSynthesis.getVoices();
         ) {
             playDesktopToast = true;
         }
-        var playXSNotification = false;
-        if (this.xsNotifications && this.isGameRunning && !this.isGameNoVR) {
-            playXSNotification = true;
-        }
+        var playXSNotification = this.xsNotifications;
         var playOverlayNotification = false;
         if (
             this.overlayNotifications &&
