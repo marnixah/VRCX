@@ -1,8 +1,8 @@
+using System;
+using System.IO;
 using CefSharp;
 using CefSharp.SchemeHandler;
 using CefSharp.WinForms;
-using System;
-using System.IO;
 
 namespace VRCX
 {
@@ -24,16 +24,17 @@ namespace VRCX
                 LogSeverity = LogSeverity.Disable,
                 WindowlessRenderingEnabled = true,
                 PersistSessionCookies = true,
-                PersistUserPreferences = true
+                PersistUserPreferences = true,
+                UserAgent = Program.Version
             };
-            
+
             cefSettings.RegisterScheme(new CefCustomScheme
             {
                 SchemeName = "file",
                 DomainName = "vrcx",
                 SchemeHandlerFactory = new FolderSchemeHandlerFactory(
-                    rootFolder: Path.Combine(Program.BaseDirectory, "html"),
-                    schemeName: "file",
+                    Path.Combine(Program.BaseDirectory, "html"),
+                    "file",
                     defaultPage: "index.html"
                 ),
                 IsLocal = true
@@ -47,7 +48,7 @@ namespace VRCX
             cefSettings.CefCommandLineArgs.Add("disable-extensions");
             cefSettings.CefCommandLineArgs["autoplay-policy"] = "no-user-gesture-required";
             cefSettings.CefCommandLineArgs.Add("disable-web-security");
-            cefSettings.SetOffScreenRenderingBestPerformanceArgs();
+            cefSettings.SetOffScreenRenderingBestPerformanceArgs(); // causes white screen sometimes?
 
             if (Program.LaunchDebug)
                 cefSettings.RemoteDebuggingPort = 8088;
@@ -57,8 +58,6 @@ namespace VRCX
 
             // Enable High-DPI support on Windows 7 or newer
             Cef.EnableHighDPISupport();
-
-            cefSettings.UserAgent = Program.Version;
 
             if (Cef.Initialize(cefSettings) == false)
             {
