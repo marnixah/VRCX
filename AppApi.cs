@@ -345,6 +345,11 @@ namespace VRCX
             MainForm.Instance.Invoke(new Action(() => { MainForm.Instance.Focus_Window(); }));
         }
 
+        public void RedrawWindow()
+        {
+            ExecuteAppFunction("redrawWindow", "");
+        }
+
         public string CustomCssPath()
         {
             var output = string.Empty;

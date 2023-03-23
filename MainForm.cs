@@ -17,6 +17,8 @@ namespace VRCX
     public partial class MainForm : WinformBase
     {
         public static MainForm Instance;
+
+        private FormWindowState _lastWindowState = FormWindowState.Minimized;
         public ChromiumWebBrowser Browser;
         private int LastLocationX;
         private int LastLocationY;
@@ -122,6 +124,12 @@ namespace VRCX
 
         private void MainForm_Resize(object sender, System.EventArgs e)
         {
+            if (WindowState != _lastWindowState)
+            {
+                AppApi.Instance.RedrawWindow();
+                _lastWindowState = WindowState;
+            }
+
             if (WindowState != FormWindowState.Normal)
             {
                 return;

@@ -5055,6 +5055,13 @@ speechSynthesis.getVoices();
         workerTimers.setTimeout(() => this.updateLoop(), 500);
     };
 
+    $app.methods.redrawWindow = function () {
+        this.redraw = true;
+        workerTimers.setTimeout(() => (this.redraw = false), 100);
+        console.log('redrawWindow');
+    };
+
+    $app.data.redraw = false;
     $app.data.debug = false;
     $app.data.debugWebRequests = false;
     $app.data.debugWebSocket = false;
