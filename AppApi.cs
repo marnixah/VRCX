@@ -9,7 +9,6 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
-using System.IO.Pipes;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
@@ -195,10 +194,13 @@ namespace VRCX
             }
         }
 
-        public void StartGameFromPath(string path, string arguments)
+        public bool StartGameFromPath(string path, string arguments)
         {
             if (!path.EndsWith(".exe"))
                 path = Path.Combine(path, "start_protected_game.exe");
+
+            if (!File.Exists(path))
+                return false;
 
             Process.Start(new ProcessStartInfo
             {
@@ -206,7 +208,8 @@ namespace VRCX
                 FileName = path,
                 UseShellExecute = false,
                 Arguments = arguments
-            }).Close();
+            })?.Close();
+            return true;
         }
 
         public void OpenLink(string url)
@@ -308,12 +311,20 @@ namespace VRCX
 
         public void IPCAnnounceStart()
         {
-            var ipcClient = new NamedPipeClientStream(".", "vrcx-ipc", PipeDirection.InOut);
-            ipcClient.Connect();
-            if (!ipcClient.IsConnected)
-                return;
-            var buffer = Encoding.UTF8.GetBytes("{\"type\":\"VRCXLaunch\"}" + (char)0x00);
-            ipcClient.BeginWrite(buffer, 0, buffer.Length, IPCClient.OnSend, ipcClient);
+            IPCServer.Send(new IPCPacket
+            {
+                Type = "VRCXLaunch"
+            });
+        }
+
+        public void SendIpc(string type, string data)
+        {
+            IPCServer.Send(new IPCPacket
+            {
+                Type = "VrcxMessage",
+                MsgType = type,
+                Data = data
+            });
         }
 
         public void ExecuteAppFunction(string function, string json)
@@ -365,6 +376,11 @@ namespace VRCX
         public string GetVersion()
         {
             return Program.Version;
+        }
+
+        public bool VrcClosedGracefully()
+        {
+            return LogWatcher.Instance.VrcClosedGracefully;
         }
 
         public void ChangeTheme(int value)
