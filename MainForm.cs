@@ -17,7 +17,7 @@ namespace VRCX
     public partial class MainForm : WinformBase
     {
         public static MainForm Instance;
-
+        private static NLog.Logger jslogger = NLog.LogManager.GetLogger("Javascript");
         private FormWindowState _lastWindowState = FormWindowState.Minimized;
         public ChromiumWebBrowser Browser;
         private int LastLocationX;
@@ -43,7 +43,7 @@ namespace VRCX
 
             Browser = new ChromiumWebBrowser("file://vrcx/index.html")
             {
-                DragHandler = new NoopDragHandler(),
+                DragHandler = new CustomDragHandler(),
                 MenuHandler = new CustomMenuHandler(),
                 DownloadHandler = new CustomDownloadHandler(),
                 BrowserSettings =
@@ -60,6 +60,10 @@ namespace VRCX
             };
 
             Util.ApplyJavascriptBindings(Browser.JavascriptObjectRepository);
+            Browser.ConsoleMessage += (_, args) =>
+            {
+                jslogger.Debug(args.Message + " (" + args.Source + ":" + args.Line + ")");
+            };
 
             Controls.Add(Browser);
         }

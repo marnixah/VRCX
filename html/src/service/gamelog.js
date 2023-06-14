@@ -41,6 +41,11 @@ class GameLogService {
                 gameLog.displayName = args[1];
                 break;
 
+            case 'resource-load-string':
+            case 'resource-load-image':
+                gameLog.resourceUrl = args[0];
+                break;
+
             case 'video-sync':
                 gameLog.timestamp = args[0];
                 break;
@@ -111,4 +116,4 @@ class GameLogService {
 var self = new GameLogService();
 window.gameLogService = self;
 
-export {self as default, GameLogService as LogWatcherService};
+export { self as default, GameLogService as LogWatcherService };

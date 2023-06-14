@@ -139,6 +139,11 @@ html
                                         span.extra
                                             span.time {{ feed.created_at | formatDate }}
                                             | 🏷️ #[span.name(v-text="feed.message")]
+                                div(v-else-if="feed.type === 'group.queueReady'" class="x-friend-item" :class="{ friend: feed.isFriend, favorite: feed.isFavorite }")
+                                    .detail
+                                        span.extra
+                                            span.time {{ feed.created_at | formatDate }}
+                                            | 📨 #[span.name(v-text="feed.message")]
                                 div(v-else-if="feed.type === 'PortalSpawn'" class="x-friend-item" :class="{ friend: feed.isFriend, favorite: feed.isFavorite }")
                                     .detail
                                         span.extra
@@ -339,6 +344,11 @@ html
                                         span.extra
                                             span.time {{ feed.created_at | formatDate }}
                                             | #[span.name(v-text="feed.message")]
+                                div(v-else-if="feed.type === 'group.queueReady'" class="x-friend-item" :class="{ friend: feed.isFriend, favorite: feed.isFavorite }")
+                                    .detail
+                                        span.extra
+                                            span.time {{ feed.created_at | formatDate }}
+                                            | #[span.name(v-text="feed.message")]
                                 div(v-else-if="feed.type === 'PortalSpawn'" class="x-friend-item" :class="{ friend: feed.isFriend, favorite: feed.isFavorite }")
                                     .detail
                                         span.extra
@@ -505,9 +515,10 @@ html
                                 location(:location="feed.location" :hint="feed.worldName" :grouphint="feed.groupName" :link="false" style="margin-left:10px")
                             template(v-else-if="feed.type === 'OnPlayerJoined'")
                                 span(style="margin-left:10px;color:#a3a3a3") has joined
-                                span(v-if="feed.platform === 'Desktop'" style="color:#409eff;margin-left:10px") PC
+                                span(v-if="feed.platform === 'Desktop'" style="color:#409eff;margin-left:10px") Desktop
                                 span(v-else-if="feed.platform === 'VR'" style="color:#409eff;margin-left:10px") VR
-                                span(v-else-if="feed.platform === 'Quest'" style="color:#67c23a;margin-left:10px") Q
+                                span(v-else-if="feed.platform === 'Quest'" style="color:#67c23a;margin-left:10px") Quest
+                                span(v-else-if="feed.platform === 'iOS'" style="color:#c7c7ce;margin-left:10px") iOS
                                 span(v-if="!feed.inCache" style="color:#aaa;margin-left:10px") #[i.el-icon-download]
                                 span(v-text="feed.avatar.name" style="margin-left:10px")
                             template(v-else-if="feed.type === 'SpawnEmoji'")

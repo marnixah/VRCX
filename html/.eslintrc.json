@@ -65,6 +65,7 @@
         ],
         "no-inline-comments": 0,
         "no-invalid-this": 0,
+        "no-loop-func": 0,
         "no-magic-numbers": 0,
         "no-negated-condition": 0,
         "no-plusplus": 0,
@@ -85,6 +86,7 @@
         "sort-keys": 0,
         "sort-vars": 0,
         "strict": 0,
-        "vars-on-top": 0
+        "vars-on-top": 0,
+        "object-curly-spacing": ["error", "always"]
     }
 }

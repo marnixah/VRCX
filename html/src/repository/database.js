@@ -57,6 +57,9 @@ class Database {
             `CREATE TABLE IF NOT EXISTS gamelog_video_play (id INTEGER PRIMARY KEY, created_at TEXT, video_url TEXT, video_name TEXT, video_id TEXT, location TEXT, display_name TEXT, user_id TEXT, UNIQUE(created_at, video_url))`
         );
         await sqliteService.executeNonQuery(
+            `CREATE TABLE IF NOT EXISTS gamelog_resource_load (id INTEGER PRIMARY KEY, created_at TEXT, resource_url TEXT, resource_type TEXT, location TEXT, UNIQUE(created_at, resource_url))`
+        );
+        await sqliteService.executeNonQuery(
             `CREATE TABLE IF NOT EXISTS gamelog_event (id INTEGER PRIMARY KEY, created_at TEXT, data TEXT, UNIQUE(created_at, data))`
         );
         await sqliteService.executeNonQuery(
@@ -502,6 +505,16 @@ class Database {
             var row = {
                 rowId: dbRow[0],
                 created_at: dbRow[1],
+                type: dbRow[3],
+                resourceUrl: dbRow[2],
+                location: dbRow[4]
+            };
+            gamelogDatabase.unshift(row);
+        }, `SELECT * FROM gamelog_resource_load WHERE created_at >= date('${dateOffset}') ORDER BY id DESC`);
+        await sqliteService.execute((dbRow) => {
+            var row = {
+                rowId: dbRow[0],
+                created_at: dbRow[1],
                 type: 'Event',
                 data: dbRow[2]
             };
@@ -621,6 +634,18 @@ class Database {
         );
     }
 
+    addGamelogResourceLoadToDatabase(entry) {
+        sqliteService.executeNonQuery(
+            `INSERT OR IGNORE INTO gamelog_resource_load (created_at, resource_url, resource_type, location) VALUES (@created_at, @resource_url, @resource_type, @location)`,
+            {
+                '@created_at': entry.created_at,
+                '@resource_url': entry.resourceUrl,
+                '@resource_type': entry.type,
+                '@location': entry.location
+            }
+        );
+    }
+
     addGamelogEventToDatabase(entry) {
         sqliteService.executeNonQuery(
             `INSERT OR IGNORE INTO gamelog_event (created_at, data) VALUES (@created_at, @data)`,
@@ -683,6 +708,10 @@ class Database {
         var expired = 0;
         if (row.$isExpired) {
             expired = 1;
+        }
+        if (!entry.created_at || !entry.type || !entry.id) {
+            console.error('Notification is missing required field', entry);
+            throw new Error('Notification is missing required field');
         }
         sqliteService.executeNonQuery(
             `INSERT OR IGNORE INTO ${Database.userPrefix}_notifications (id, created_at, type, sender_user_id, sender_username, receiver_user_id, message, world_id, world_name, image_url, invite_message, request_message, response_message, expired) VALUES (@id, @created_at, @type, @sender_user_id, @sender_username, @receiver_user_id, @message, @world_id, @world_name, @image_url, @invite_message, @request_message, @response_message, @expired)`,
@@ -813,6 +842,14 @@ class Database {
         await sqliteService.execute((row) => {
             size = row[0];
         }, `SELECT COUNT(*) FROM gamelog_video_play`);
+        return size;
+    }
+
+    async getResourceLoadTableSize() {
+        var size = 0;
+        await sqliteService.execute((row) => {
+            size = row[0];
+        }, `SELECT COUNT(*) FROM gamelog_resource_load`);
         return size;
     }
 
@@ -1001,12 +1038,154 @@ class Database {
                 '@displayName': input.displayName
             }
         );
+        instances.delete('');
         ref.joinCount = instances.size;
         return ref;
     }
 
+    async getAllUserStats(userIds, displayNames) {
+        var data = [];
+        // this makes me most sad
+        var userIdsString = '';
+        for (var userId of userIds) {
+            userIdsString += `'${userId}', `;
+        }
+        userIdsString = userIdsString.slice(0, -2);
+        var displayNamesString = '';
+        for (var displayName of displayNames) {
+            displayNamesString += `'${displayName.replaceAll("'", "''")}', `;
+        }
+        displayNamesString = displayNamesString.slice(0, -2);
+
+        await sqliteService.execute(
+            (dbRow) => {
+                var row = {
+                    created_at: dbRow[0],
+                    userId: dbRow[1],
+                    timeSpent: dbRow[2],
+                    joinCount: dbRow[3],
+                    displayName: dbRow[4]
+                };
+                data.push(row);
+            },
+            `SELECT
+                g.created_at,
+                g.user_id,
+                SUM(g.time) AS timeSpent,
+                COUNT(DISTINCT g.location) AS joinCount,
+                g.display_name,
+                MAX(g.id) AS max_id
+            FROM
+                gamelog_join_leave g
+            WHERE
+                g.user_id IN (${userIdsString})
+                OR g.display_name IN (${displayNamesString})
+            GROUP BY
+                g.user_id,
+                g.display_name
+            ORDER BY
+                g.user_id DESC
+            `
+        );
+        return data;
+    }
+
+    static async getFeedByInstanceId(instanceId, filters, vipList) {
+        var feedDatabase = [];
+        var vipQuery = '';
+        if (vipList.length > 0) {
+            vipQuery = 'AND user_id IN (';
+            vipList.forEach((vip, i) => {
+                vipQuery += `'${vip.replaceAll("'", "''")}'`;
+                if (i < vipList.length - 1) {
+                    vipQuery += ', ';
+                }
+            });
+            vipQuery += ')';
+        }
+        var gps = true;
+        var online = true;
+        var offline = true;
+        if (filters.length > 0) {
+            gps = false;
+            online = false;
+            offline = false;
+            filters.forEach((filter) => {
+                switch (filter) {
+                    case 'GPS':
+                        gps = true;
+                        break;
+                    case 'Online':
+                        online = true;
+                        break;
+                    case 'Offline':
+                        offline = true;
+                        break;
+                }
+            });
+        }
+        if (gps) {
+            await sqliteService.execute((dbRow) => {
+                var row = {
+                    rowId: dbRow[0],
+                    created_at: dbRow[1],
+                    userId: dbRow[2],
+                    displayName: dbRow[3],
+                    type: 'GPS',
+                    location: dbRow[4],
+                    worldName: dbRow[5],
+                    previousLocation: dbRow[6],
+                    time: dbRow[7],
+                    groupName: dbRow[8]
+                };
+                feedDatabase.unshift(row);
+            }, `SELECT * FROM ${Database.userPrefix}_feed_gps WHERE location LIKE '%${instanceId}%' ${vipQuery} ORDER BY id DESC LIMIT ${Database.maxTableSize}`);
+        }
+        if (online || offline) {
+            var query = '';
+            if (!online || !offline) {
+                if (online) {
+                    query = "AND type = 'Online'";
+                } else if (offline) {
+                    query = "AND type = 'Offline'";
+                }
+            }
+            await sqliteService.execute((dbRow) => {
+                var row = {
+                    rowId: dbRow[0],
+                    created_at: dbRow[1],
+                    userId: dbRow[2],
+                    displayName: dbRow[3],
+                    type: dbRow[4],
+                    location: dbRow[5],
+                    worldName: dbRow[6],
+                    time: dbRow[7],
+                    groupName: dbRow[8]
+                };
+                feedDatabase.unshift(row);
+            }, `SELECT * FROM ${Database.userPrefix}_feed_online_offline WHERE (location LIKE '%${instanceId}%' ${query}) ${vipQuery} ORDER BY id DESC LIMIT ${Database.maxTableSize}`);
+        }
+        var compareByCreatedAt = function (a, b) {
+            var A = a.created_at;
+            var B = b.created_at;
+            if (A < B) {
+                return -1;
+            }
+            if (A > B) {
+                return 1;
+            }
+            return 0;
+        };
+        feedDatabase.sort(compareByCreatedAt);
+        feedDatabase.splice(0, feedDatabase.length - Database.maxTableSize);
+        return feedDatabase;
+    }
+
     async lookupFeedDatabase(search, filters, vipList) {
         var search = search.replaceAll("'", "''");
+        if (search.startsWith('wrld_')) {
+            return Database.getFeedByInstanceId(search, filters, vipList);
+        }
         var vipQuery = '';
         if (vipList.length > 0) {
             vipQuery = 'AND user_id IN (';
@@ -1168,14 +1347,169 @@ class Database {
         return feedDatabase;
     }
 
+    static async getGameLogByLocation(instanceId, filters) {
+        var gamelogDatabase = [];
+        var location = true;
+        var onplayerjoined = true;
+        var onplayerleft = true;
+        var portalspawn = true;
+        var videoplay = true;
+        var resourceload_string = true;
+        var resourceload_image = true;
+        if (filters.length > 0) {
+            location = false;
+            onplayerjoined = false;
+            onplayerleft = false;
+            portalspawn = false;
+            videoplay = false;
+            resourceload_string = false;
+            resourceload_image = false;
+            filters.forEach((filter) => {
+                switch (filter) {
+                    case 'Location':
+                        location = true;
+                        break;
+                    case 'OnPlayerJoined':
+                        onplayerjoined = true;
+                        break;
+                    case 'OnPlayerLeft':
+                        onplayerleft = true;
+                        break;
+                    case 'PortalSpawn':
+                        portalspawn = true;
+                        break;
+                    case 'VideoPlay':
+                        videoplay = true;
+                        break;
+                    case 'StringLoad':
+                        resourceload_string = true;
+                        break;
+                    case 'ImageLoad':
+                        resourceload_image = true;
+                        break;
+                }
+            });
+        }
+        if (location) {
+            await sqliteService.execute((dbRow) => {
+                var row = {
+                    rowId: dbRow[0],
+                    created_at: dbRow[1],
+                    type: 'Location',
+                    location: dbRow[2],
+                    worldId: dbRow[3],
+                    worldName: dbRow[4],
+                    time: dbRow[5],
+                    groupName: dbRow[6]
+                };
+                gamelogDatabase.unshift(row);
+            }, `SELECT * FROM gamelog_location WHERE location LIKE '%${instanceId}%' ORDER BY id DESC LIMIT ${Database.maxTableSize}`);
+        }
+        if (onplayerjoined || onplayerleft) {
+            var query = '';
+            if (!onplayerjoined || !onplayerleft) {
+                if (onplayerjoined) {
+                    query = "AND type = 'OnPlayerJoined'";
+                } else if (onplayerleft) {
+                    query = "AND type = 'OnPlayerLeft'";
+                }
+            }
+            await sqliteService.execute((dbRow) => {
+                var row = {
+                    rowId: dbRow[0],
+                    created_at: dbRow[1],
+                    type: dbRow[2],
+                    displayName: dbRow[3],
+                    location: dbRow[4],
+                    userId: dbRow[5],
+                    time: dbRow[6]
+                };
+                gamelogDatabase.unshift(row);
+            }, `SELECT * FROM gamelog_join_leave WHERE (location LIKE '%${instanceId}%' AND user_id != '${Database.userId}') ${query} ORDER BY id DESC LIMIT ${Database.maxTableSize}`);
+        }
+        if (portalspawn) {
+            await sqliteService.execute((dbRow) => {
+                var row = {
+                    rowId: dbRow[0],
+                    created_at: dbRow[1],
+                    type: 'PortalSpawn',
+                    displayName: dbRow[2],
+                    location: dbRow[3],
+                    userId: dbRow[4],
+                    instanceId: dbRow[5],
+                    worldName: dbRow[6]
+                };
+                gamelogDatabase.unshift(row);
+            }, `SELECT * FROM gamelog_portal_spawn WHERE location LIKE '%${instanceId}%' ORDER BY id DESC LIMIT ${Database.maxTableSize}`);
+        }
+        if (videoplay) {
+            await sqliteService.execute((dbRow) => {
+                var row = {
+                    rowId: dbRow[0],
+                    created_at: dbRow[1],
+                    type: 'VideoPlay',
+                    videoUrl: dbRow[2],
+                    videoName: dbRow[3],
+                    videoId: dbRow[4],
+                    location: dbRow[5],
+                    displayName: dbRow[6],
+                    userId: dbRow[7]
+                };
+                gamelogDatabase.unshift(row);
+            }, `SELECT * FROM gamelog_video_play WHERE location LIKE '%${instanceId}%' ORDER BY id DESC LIMIT ${Database.maxTableSize}`);
+        }
+        if (resourceload_string || resourceload_image) {
+            var checkString = '';
+            var checkImage = '';
+            if (!resourceload_string) {
+                checkString = `AND resource_type != 'StringLoad'`;
+            }
+            if (!resourceload_image) {
+                checkString = `AND resource_type != 'ImageLoad'`;
+            }
+            await sqliteService.execute((dbRow) => {
+                var row = {
+                    rowId: dbRow[0],
+                    created_at: dbRow[1],
+                    type: dbRow[3],
+                    resourceUrl: dbRow[2],
+                    location: dbRow[4]
+                };
+                gamelogDatabase.unshift(row);
+            }, `SELECT * FROM gamelog_resource_load WHERE location LIKE '%${instanceId}%' ${checkString} ${checkImage} ORDER BY id DESC LIMIT ${Database.maxTableSize}`);
+        }
+        var compareByCreatedAt = function (a, b) {
+            var A = a.created_at;
+            var B = b.created_at;
+            if (A < B) {
+                return -1;
+            }
+            if (A > B) {
+                return 1;
+            }
+            return 0;
+        };
+        gamelogDatabase.sort(compareByCreatedAt);
+        gamelogDatabase.splice(
+            0,
+            gamelogDatabase.length - Database.maxTableSize
+        );
+        return gamelogDatabase;
+    }
+
     async lookupGameLogDatabase(search, filters) {
         var search = search.replaceAll("'", "''");
+        if (search.startsWith('wrld_')) {
+            return Database.getGameLogByLocation(search, filters);
+        }
         var location = true;
         var onplayerjoined = true;
         var onplayerleft = true;
         var portalspawn = true;
         var msgevent = true;
         var videoplay = true;
+        var resourceload_string = true;
+        var resourceload_image = true;
         if (filters.length > 0) {
             location = false;
             onplayerjoined = false;
@@ -1183,6 +1517,8 @@ class Database {
             portalspawn = false;
             msgevent = false;
             videoplay = false;
+            resourceload_string = false;
+            resourceload_image = false;
             filters.forEach((filter) => {
                 switch (filter) {
                     case 'Location':
@@ -1202,6 +1538,12 @@ class Database {
                         break;
                     case 'VideoPlay':
                         videoplay = true;
+                        break;
+                    case 'StringLoad':
+                        resourceload_string = true;
+                        break;
+                    case 'ImageLoad':
+                        resourceload_image = true;
                         break;
                 }
             });
@@ -1286,6 +1628,26 @@ class Database {
                 gamelogDatabase.unshift(row);
             }, `SELECT * FROM gamelog_video_play WHERE video_url LIKE '%${search}%' OR video_name LIKE '%${search}%' OR display_name LIKE '%${search}%' ORDER BY id DESC LIMIT ${Database.maxTableSize}`);
         }
+        if (resourceload_string || resourceload_image) {
+            var checkString = '';
+            var checkImage = '';
+            if (!resourceload_string) {
+                checkString = `AND resource_type != 'StringLoad'`;
+            }
+            if (!resourceload_image) {
+                checkString = `AND resource_type != 'ImageLoad'`;
+            }
+            await sqliteService.execute((dbRow) => {
+                var row = {
+                    rowId: dbRow[0],
+                    created_at: dbRow[1],
+                    type: dbRow[3],
+                    resourceUrl: dbRow[2],
+                    location: dbRow[4]
+                };
+                gamelogDatabase.unshift(row);
+            }, `SELECT * FROM gamelog_resource_load WHERE resource_url LIKE '%${search}%' ${checkString} ${checkImage} ORDER BY id DESC LIMIT ${Database.maxTableSize}`);
+        }
         var compareByCreatedAt = function (a, b) {
             var A = a.created_at;
             var B = b.created_at;
@@ -1324,6 +1686,9 @@ class Database {
         await sqliteService.execute((dbRow) => {
             gamelogDatabase.unshift(dbRow[0]);
         }, 'SELECT created_at FROM gamelog_video_play ORDER BY id DESC LIMIT 1');
+        await sqliteService.execute((dbRow) => {
+            gamelogDatabase.unshift(dbRow[0]);
+        }, 'SELECT created_at FROM gamelog_resource_load ORDER BY id DESC LIMIT 1');
         if (gamelogDatabase.length > 0) {
             gamelogDatabase.sort();
             var newDate = gamelogDatabase[gamelogDatabase.length - 1];
@@ -1432,6 +1797,54 @@ class Database {
             {
                 '@user_id': input.id,
                 '@displayName': input.displayName,
+                '@location': input.location
+            }
+        );
+    }
+
+    deleteGameLogEntry(input) {
+        switch (input.type) {
+            case 'VideoPlay':
+                this.deleteGameLogVideoPlay(input);
+                break;
+            case 'Event':
+                this.deleteGameLogEvent(input);
+                break;
+            case 'StringLoad':
+            case 'ImageLoad':
+                this.deleteGameLogResourceLoad(input);
+                break;
+        }
+    }
+
+    deleteGameLogVideoPlay(input) {
+        sqliteService.executeNonQuery(
+            `DELETE FROM gamelog_video_play WHERE created_at = @created_at AND video_url = @video_url AND location = @location`,
+            {
+                '@created_at': input.created_at,
+                '@video_url': input.videoUrl,
+                '@location': input.location
+            }
+        );
+    }
+
+    deleteGameLogEvent(input) {
+        sqliteService.executeNonQuery(
+            `DELETE FROM gamelog_event WHERE created_at = @created_at AND data = @data`,
+            {
+                '@created_at': input.created_at,
+                '@data': input.data
+            }
+        );
+    }
+
+    deleteGameLogResourceLoad(input) {
+        sqliteService.executeNonQuery(
+            `DELETE FROM gamelog_resource_load WHERE created_at = @created_at AND resource_url = @resource_url AND location = @location`,
+            {
+                '@created_at': input.created_at,
+                '@resource_url': input.resourceUrl,
+                '@type': input.type,
                 '@location': input.location
             }
         );
@@ -1575,7 +1988,7 @@ class Database {
         );
     }
 
-    async getAvatarHistory() {
+    async getAvatarHistory(currentUserId) {
         var data = [];
         await sqliteService.execute((dbRow) => {
             var row = {
@@ -1592,7 +2005,7 @@ class Database {
                 version: dbRow[13]
             };
             data.push(row);
-        }, `SELECT * FROM ${Database.userPrefix}_avatar_history INNER JOIN cache_avatar ON cache_avatar.id = ${Database.userPrefix}_avatar_history.avatar_id ORDER BY ${Database.userPrefix}_avatar_history.created_at DESC LIMIT 100`);
+        }, `SELECT * FROM ${Database.userPrefix}_avatar_history INNER JOIN cache_avatar ON cache_avatar.id = ${Database.userPrefix}_avatar_history.avatar_id WHERE author_id != "${currentUserId}" ORDER BY ${Database.userPrefix}_avatar_history.created_at DESC LIMIT 100`);
         return data;
     }
 
@@ -1837,6 +2250,12 @@ class Database {
         });
     }
 
+    fixBrokenNotifications() {
+        sqliteService.executeNonQuery(
+            `DELETE FROM ${Database.userPrefix}_notifications WHERE (created_at is null or created_at = '')`
+        );
+    }
+
     async updateTableForGroupNames() {
         var tables = [];
         await sqliteService.execute((dbRow) => {
@@ -1862,4 +2281,4 @@ class Database {
 var self = new Database();
 window.database = self;
 
-export {self as default, Database};
+export { self as default, Database };

@@ -34,19 +34,22 @@ namespace VRCX
 
         public string GetAssetId(string id)
         {
-            byte[] hash = SHA256.Create().ComputeHash(Encoding.UTF8.GetBytes(id));
-            StringBuilder idHex = new StringBuilder(hash.Length * 2);
-            foreach (byte b in hash)
+            using(var sha256 = SHA256.Create())
             {
-                idHex.AppendFormat("{0:x2}", b);
+                byte[] hash = sha256.ComputeHash(Encoding.UTF8.GetBytes(id));
+                StringBuilder idHex = new StringBuilder(hash.Length * 2);
+                foreach (byte b in hash)
+                {
+                    idHex.AppendFormat("{0:x2}", b);
+                }
+                return idHex.ToString().ToUpper().Substring(0, 16);
             }
-            return idHex.ToString().ToUpper().Substring(0, 16);
         }
 
         public string GetAssetVersion(int version)
         {
             byte[] bytes = BitConverter.GetBytes(version);
-            string versionHex = String.Empty;
+            string versionHex = string.Empty;
             foreach (byte b in bytes)
             {
                 versionHex += b.ToString("X2");
@@ -59,6 +62,12 @@ namespace VRCX
             return AppApi.Instance.GetVRChatCacheLocation();
         }
 
+        /// <summary>
+        /// Gets the full location of the VRChat cache for a specific asset bundle.
+        /// </summary>
+        /// <param name="id">The ID of the asset bundle.</param>
+        /// <param name="version">The version of the asset bundle.</param>
+        /// <returns>The full location of the VRChat cache for the specified asset bundle.</returns>
         public string GetVRChatCacheFullLocation(string id, int version)
         {
             var cachePath = GetVRChatCacheLocation();
@@ -67,6 +76,12 @@ namespace VRCX
             return Path.Combine(cachePath, idHash, versionLocation);
         }
 
+        /// <summary>
+        /// Checks the VRChat cache for a specific asset bundle.
+        /// </summary>
+        /// <param name="id">The ID of the asset bundle.</param>
+        /// <param name="version">The version of the asset bundle.</param>
+        /// <returns>An array containing the file size and lock status of the asset bundle.</returns>
         public long[] CheckVRChatCache(string id, int version)
         {
             long FileSize = -1;
@@ -108,8 +123,7 @@ namespace VRCX
             DownloadCanceled = true;
             try
             {
-                if (client != null)
-                    client.CancelAsync();
+                client?.CancelAsync();
                 if (File.Exists(DownloadTempLocation))
                     File.Delete(DownloadTempLocation);
             }
@@ -155,6 +169,11 @@ namespace VRCX
             DownloadProgress = -16;
         }
 
+        /// <summary>
+        /// Deletes the cache directory for a specific asset bundle.
+        /// </summary>
+        /// <param name="id">The ID of the asset bundle to delete.</param>
+        /// <param name="version">The version of the asset bundle to delete.</param>
         public void DeleteCache(string id, int version)
         {
             var FullLocation = GetVRChatCacheFullLocation(id, version);
@@ -162,6 +181,9 @@ namespace VRCX
                 Directory.Delete(FullLocation, true);
         }
 
+        /// <summary>
+        /// Deletes the entire VRChat cache directory.
+        /// </summary>
         public void DeleteAllCache()
         {
             var cachePath = GetVRChatCacheLocation();
@@ -172,6 +194,9 @@ namespace VRCX
             }
         }
 
+        /// <summary>
+        /// Removes empty directories from the VRChat cache directory and deletes old versions of cached asset bundles.
+        /// </summary>
         public void SweepCache()
         {
             var cachePath = GetVRChatCacheLocation();
@@ -201,31 +226,32 @@ namespace VRCX
             }
         }
 
+        /// <summary>
+        /// Returns the size of the VRChat cache directory in bytes.
+        /// </summary>
+        /// <returns>The size of the VRChat cache directory in bytes.</returns>
         public long GetCacheSize()
         {
             var cachePath = GetVRChatCacheLocation();
-            if (Directory.Exists(cachePath))
-            {
-                return DirSize(new DirectoryInfo(cachePath));
-            }
-            else
-            {
-                return 0;
-            }
+
+            if (!Directory.Exists(cachePath)) return 0;
+
+            return DirSize(new DirectoryInfo(cachePath));
         }
 
+
+        /// <summary>
+        /// Recursively calculates the size of a directory and all its subdirectories.
+        /// </summary>
+        /// <param name="d">The directory to calculate the size of.</param>
+        /// <returns>The size of the directory and all its subdirectories in bytes.</returns>
         public long DirSize(DirectoryInfo d)
         {
             long size = 0;
-            FileInfo[] files = d.GetFiles();
+            FileInfo[] files = d.GetFiles("*.*", SearchOption.AllDirectories);
             foreach (FileInfo file in files)
             {
                 size += file.Length;
-            }
-            DirectoryInfo[] directories = d.GetDirectories();
-            foreach (DirectoryInfo directory in directories)
-            {
-                size += DirSize(directory);
             }
             return size;
         }

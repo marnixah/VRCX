@@ -7,11 +7,13 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Drawing;
 using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -36,44 +38,83 @@ namespace VRCX
         static AppApi()
         {
             Instance = new AppApi();
+
+            ProcessMonitor.Instance.ProcessStarted += Instance.OnProcessStateChanged;
+            ProcessMonitor.Instance.ProcessExited += Instance.OnProcessStateChanged;
         }
 
+        private void OnProcessStateChanged(MonitoredProcess monitoredProcess)
+        {
+            if (!monitoredProcess.HasName("VRChat") && !monitoredProcess.HasName("vrserver"))
+                return;
+
+            CheckGameRunning();
+        }
+
+        /// <summary>
+        /// Computes the MD5 hash of the file represented by the specified base64-encoded string.
+        /// </summary>
+        /// <param name="Blob">The base64-encoded string representing the file.</param>
+        /// <returns>The MD5 hash of the file as a base64-encoded string.</returns>
         public string MD5File(string Blob)
         {
             var fileData = Convert.FromBase64CharArray(Blob.ToCharArray(), 0, Blob.Length);
-            var md5 = MD5.Create().ComputeHash(fileData);
-            return Convert.ToBase64String(md5);
+            using (var md5 = MD5.Create())
+            {
+                var md5Hash = md5.ComputeHash(fileData);
+                return Convert.ToBase64String(md5Hash);
+            }
         }
 
+        /// <summary>
+        /// Computes the signature of the file represented by the specified base64-encoded string using the librsync library.
+        /// </summary>
+        /// <param name="Blob">The base64-encoded string representing the file.</param>
+        /// <returns>The signature of the file as a base64-encoded string.</returns>
         public string SignFile(string Blob)
         {
-            var fileData = Convert.FromBase64CharArray(Blob.ToCharArray(), 0, Blob.Length);
-            var sig = Librsync.ComputeSignature(new MemoryStream(fileData));
-            var memoryStream = new MemoryStream();
-            sig.CopyTo(memoryStream);
-            var sigBytes = memoryStream.ToArray();
-            return Convert.ToBase64String(sigBytes);
+            var fileData = Convert.FromBase64String(Blob);
+            using (var sig = Librsync.ComputeSignature(new MemoryStream(fileData)))
+            using (var memoryStream = new MemoryStream())
+            {
+                sig.CopyTo(memoryStream);
+                var sigBytes = memoryStream.ToArray();
+                return Convert.ToBase64String(sigBytes);
+            }
         }
 
+        /// <summary>
+        /// Returns the length of the file represented by the specified base64-encoded string.
+        /// </summary>
+        /// <param name="Blob">The base64-encoded string representing the file.</param>
+        /// <returns>The length of the file in bytes.</returns>
         public string FileLength(string Blob)
         {
-            var fileData = Convert.FromBase64CharArray(Blob.ToCharArray(), 0, Blob.Length);
+            var fileData = Convert.FromBase64String(Blob);
             return fileData.Length.ToString();
         }
 
+        /// <summary>
+        /// Reads the VRChat config file and returns its contents as a string.
+        /// </summary>
+        /// <returns>The contents of the VRChat config file as a string, or an empty string if the file does not exist.</returns>
         public string ReadConfigFile()
         {
             var logPath = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData) + @"Low\VRChat\VRChat\";
             var configFile = Path.Combine(logPath, @"config.json");
             if (!Directory.Exists(logPath) || !File.Exists(configFile))
             {
-                return "";
+                return string.Empty;
             }
 
             var json = File.ReadAllText(configFile);
             return json;
         }
 
+        /// <summary>
+        /// Writes the specified JSON string to the VRChat config file.
+        /// </summary>
+        /// <param name="json">The JSON string to write to the config file.</param>
         public void WriteConfigFile(string json)
         {
             var logPath = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData) + @"Low\VRChat\VRChat\";
@@ -81,6 +122,11 @@ namespace VRCX
             File.WriteAllText(configFile, json);
         }
 
+        /// <summary>
+        /// Gets the VRChat application data location by reading the config file and checking the cache directory.
+        /// If the cache directory is not found in the config file, it returns the default cache path.
+        /// </summary>
+        /// <returns>The VRChat application data location.</returns>
         public string GetVRChatAppDataLocation()
         {
             var json = ReadConfigFile();
@@ -101,43 +147,59 @@ namespace VRCX
             return cachePath;
         }
 
+        /// <summary>
+        /// Gets the VRChat cache location by combining the VRChat application data location with the cache directory name.
+        /// </summary>
+        /// <returns>The VRChat cache location.</returns>
         public string GetVRChatCacheLocation()
         {
             return Path.Combine(GetVRChatAppDataLocation(), "Cache-WindowsPlayer");
         }
 
+        /// <summary>
+        /// Shows the developer tools for the main browser window.
+        /// </summary>
         public void ShowDevTools()
         {
             MainForm.Instance.Browser.ShowDevTools();
         }
 
+        /// <summary>
+        /// Deletes all cookies from the global cef cookie manager.
+        /// </summary>
         public void DeleteAllCookies()
         {
             Cef.GetGlobalCookieManager().DeleteCookies();
         }
 
-        public bool[] CheckGameRunning()
+        /// <summary>
+        /// Checks if the VRChat game and SteamVR are currently running and updates the browser's JavaScript function $app.updateIsGameRunning with the results.
+        /// </summary>
+        public void CheckGameRunning()
         {
             var isGameRunning = false;
             var isSteamVRRunning = false;
 
-            if (Process.GetProcessesByName("vrchat").Length > 0)
+            if (ProcessMonitor.Instance.IsProcessRunning("VRChat"))
             {
                 isGameRunning = true;
             }
 
-            if (Process.GetProcessesByName("vrserver").Length > 0)
+            if (ProcessMonitor.Instance.IsProcessRunning("vrserver"))
             {
                 isSteamVRRunning = true;
             }
 
-            return new[]
-            {
-                isGameRunning,
-                isSteamVRRunning
-            };
+            // TODO: fix this throwing an exception for being called before the browser is ready. somehow it gets past the checks
+            if (MainForm.Instance?.Browser != null && !MainForm.Instance.Browser.IsLoading && MainForm.Instance.Browser.CanExecuteJavascriptInMainFrame)
+                MainForm.Instance.Browser.ExecuteScriptAsync("$app.updateIsGameRunning", isGameRunning, isSteamVRRunning);
         }
 
+
+        /// <summary>
+        /// Kills the VRChat process if it is currently running.
+        /// </summary>
+        /// <returns>The number of processes that were killed (0 or 1).</returns>
         public int QuitGame()
         {
             var processes = Process.GetProcessesByName("vrchat");
@@ -147,6 +209,10 @@ namespace VRCX
             return processes.Length;
         }
 
+        /// <summary>
+        /// Starts the VRChat game process with the specified command-line arguments.
+        /// </summary>
+        /// <param name="arguments">The command-line arguments to pass to the VRChat game.</param>
         public void StartGame(string arguments)
         {
             // try stream first
@@ -194,6 +260,12 @@ namespace VRCX
             }
         }
 
+        /// <summary>
+        /// Starts the VRChat game process with the specified command-line arguments from the given path.
+        /// </summary>
+        /// <param name="path">The path to the VRChat game executable.</param>
+        /// <param name="arguments">The command-line arguments to pass to the VRChat game.</param>
+        /// <returns>True if the game was started successfully, false otherwise.</returns>
         public bool StartGameFromPath(string path, string arguments)
         {
             if (!path.EndsWith(".exe"))
@@ -212,6 +284,11 @@ namespace VRCX
             return true;
         }
 
+
+        /// <summary>
+        /// Opens the specified URL in the default browser.
+        /// </summary>
+        /// <param name="url">The URL to open.</param>
         public void OpenLink(string url)
         {
             if (url.StartsWith("http://") ||
@@ -226,11 +303,24 @@ namespace VRCX
             return CpuMonitor.Instance.CpuUsage;
         }
 
+        /// <summary>
+        /// Retrieves an image from the VRChat API and caches it for future use. The function will return the cached image if it already exists.
+        /// </summary>
+        /// <param name="url">The URL of the image to retrieve.</param>
+        /// <param name="fileId">The ID of the file associated with the image.</param>
+        /// <param name="version">The version of the file associated with the image.</param>
+        /// <returns>A string representing the file location of the cached image.</returns>
         public string GetImage(string url, string fileId, string version)
         {
             return ImageCache.GetImage(url, fileId, version);
         }
 
+        /// <summary>
+        /// Displays a desktop notification with the specified bold text, optional text, and optional image.
+        /// </summary>
+        /// <param name="BoldText">The bold text to display in the notification.</param>
+        /// <param name="Text">The optional text to display in the notification.</param>
+        /// <param name="Image">The optional image to display in the notification.</param>
         public void DesktopNotification(string BoldText, string Text = "", string Image = "")
         {
             var toastXml = ToastNotificationManager.GetTemplateContent(ToastTemplateType.ToastImageAndText02);
@@ -249,6 +339,13 @@ namespace VRCX
             ToastNotificationManager.CreateToastNotifier("VRCX").Show(toast);
         }
 
+        /// <summary>
+        /// Displays an XSOverlay notification with the specified title, content, and optional image.
+        /// </summary>
+        /// <param name="Title">The title of the notification.</param>
+        /// <param name="Content">The content of the notification.</param>
+        /// <param name="Timeout">The duration of the notification in milliseconds.</param>
+        /// <param name="Image">The optional image to display in the notification.</param>
         public void XSNotification(string Title, string Content, int Timeout, string Image = "")
         {
             bool UseBase64Icon;
@@ -265,7 +362,7 @@ namespace VRCX
                 Icon = Image;
             }
 
-            var broadcastIP = IPAddress.Parse("127.0.0.1");
+            var broadcastIP = IPAddress.Loopback;
             var broadcastSocket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
             var endPoint = new IPEndPoint(broadcastIP, 42069);
 
@@ -276,7 +373,7 @@ namespace VRCX
             msg.height = 110f;
             msg.sourceApp = "VRCX";
             msg.timeout = Timeout;
-            msg.audioPath = "";
+            msg.audioPath = string.Empty;
             msg.useBase64Icon = UseBase64Icon;
             msg.icon = Icon;
 
@@ -284,14 +381,23 @@ namespace VRCX
             broadcastSocket.SendTo(byteBuffer, endPoint);
         }
 
+        /// <summary>
+        /// Downloads the VRCX update executable from the specified URL and saves it to the AppData directory.
+        /// </summary>
+        /// <param name="url">The URL of the VRCX update to download.</param>
         public void DownloadVRCXUpdate(string url)
         {
             var Location = Path.Combine(Program.AppDataDirectory, "update.exe");
-            var client = new WebClient();
-            client.Headers.Add("user-agent", Program.Version);
-            client.DownloadFile(new Uri(url), Location);
+            using (var client = new WebClient())
+            {
+                client.Headers.Add("user-agent", Program.Version);
+                client.DownloadFile(new Uri(url), Location);
+            }
         }
 
+        /// <summary>
+        /// Restarts the VRCX application for an update by launching a new process with the "/Upgrade" argument and exiting the current process.
+        /// </summary>
         public void RestartApplication()
         {
             var VRCXProcess = new Process();
@@ -302,6 +408,10 @@ namespace VRCX
             Environment.Exit(0);
         }
 
+        /// <summary>
+        /// Checks if the VRCX update executable exists in the AppData directory.
+        /// </summary>
+        /// <returns>True if the update executable exists, false otherwise.</returns>
         public bool CheckForUpdateExe()
         {
             if (File.Exists(Path.Combine(Program.AppDataDirectory, "update.exe")))
@@ -309,6 +419,9 @@ namespace VRCX
             return false;
         }
 
+        /// <summary>
+        /// Sends an IPC packet to announce the start of VRCX.
+        /// </summary>
         public void IPCAnnounceStart()
         {
             IPCServer.Send(new IPCPacket
@@ -317,6 +430,11 @@ namespace VRCX
             });
         }
 
+        /// <summary>
+        /// Sends an IPC packet with a specified message type and data.
+        /// </summary>
+        /// <param name="type">The message type to send.</param>
+        /// <param name="data">The data to send.</param>
         public void SendIpc(string type, string data)
         {
             IPCServer.Send(new IPCPacket
@@ -329,7 +447,7 @@ namespace VRCX
 
         public void ExecuteAppFunction(string function, string json)
         {
-            if (MainForm.Instance?.Browser != null && !MainForm.Instance.Browser.IsLoading)
+            if (MainForm.Instance?.Browser != null && !MainForm.Instance.Browser.IsLoading && MainForm.Instance.Browser.CanExecuteJavascriptInMainFrame)
                 MainForm.Instance.Browser.ExecuteScriptAsync($"$app.{function}", json);
         }
 
@@ -340,6 +458,9 @@ namespace VRCX
             return command;
         }
 
+        /// <summary>
+        /// Focuses the main window of the VRCX application.
+        /// </summary>
         public void FocusWindow()
         {
             MainForm.Instance.Invoke(new Action(() => { MainForm.Instance.Focus_Window(); }));
@@ -350,6 +471,10 @@ namespace VRCX
             ExecuteAppFunction("redrawWindow", "");
         }
 
+        /// <summary>
+        /// Returns the file path of the custom user CSS file, if it exists.
+        /// </summary>
+        /// <returns>The file path of the custom user CSS file, or an empty string if it doesn't exist.</returns>
         public string CustomCssPath()
         {
             var output = string.Empty;
@@ -359,6 +484,10 @@ namespace VRCX
             return output;
         }
 
+        /// <summary>
+        /// Returns the file path of the custom user js file, if it exists.
+        /// </summary>
+        /// <returns>The file path of the custom user js file, or an empty string if it doesn't exist.</returns>
         public string CustomScriptPath()
         {
             var output = string.Empty;
@@ -383,6 +512,10 @@ namespace VRCX
             return Program.Version;
         }
 
+        /// <summary>
+        /// Returns whether or not the VRChat client was last closed gracefully. According to the log file, anyway.
+        /// </summary>
+        /// <returns>True if the VRChat client was last closed gracefully, false otherwise.</returns>
         public bool VrcClosedGracefully()
         {
             return LogWatcher.Instance.VrcClosedGracefully;
@@ -398,6 +531,10 @@ namespace VRCX
             WinformThemer.DoFunny();
         }
 
+        /// <summary>
+        /// Returns the number of milliseconds that the system has been running.
+        /// </summary>
+        /// <returns>The number of milliseconds that the system has been running.</returns>
         public double GetUptime()
         {
             using (var uptime = new PerformanceCounter("System", "System Up Time"))
@@ -407,12 +544,23 @@ namespace VRCX
             }
         }
 
+        /// <summary>
+        /// Returns a color value derived from the given user ID.
+        /// This is, essentially, and is used for, random colors.
+        /// </summary>
+        /// <param name="userId">The user ID to derive the color value from.</param>
+        /// <returns>A color value derived from the given user ID.</returns>
         public int GetColourFromUserID(string userId)
         {
             var hash = _hasher.ComputeHash(Encoding.UTF8.GetBytes(userId));
             return (hash[3] << 8) | hash[4];
         }
 
+        /// <summary>
+        /// Returns a dictionary of color values derived from the given list of user IDs.
+        /// </summary>
+        /// <param name="userIds">The list of user IDs to derive the color values from.</param>
+        /// <returns>A dictionary of color values derived from the given list of user IDs.</returns>
         public Dictionary<string, int> GetColourBulk(List<object> userIds)
         {
             var output = new Dictionary<string, int>();
@@ -424,6 +572,10 @@ namespace VRCX
             return output;
         }
 
+        /// <summary>
+        /// Retrieves the current text from the clipboard.
+        /// </summary>
+        /// <returns>The current text from the clipboard.</returns>
         public string GetClipboard()
         {
             var clipboard = string.Empty;
@@ -434,6 +586,11 @@ namespace VRCX
             return clipboard;
         }
 
+        /// <summary>
+        /// Retrieves the value of the specified key from the VRChat group in the windows registry.
+        /// </summary>
+        /// <param name="key">The name of the key to retrieve.</param>
+        /// <returns>The value of the specified key, or null if the key does not exist.</returns>
         public object GetVRChatRegistryKey(string key)
         {
             // https://answers.unity.com/questions/177945/playerprefs-changing-the-name-of-keys.html?childToView=208076#answer-208076
@@ -456,13 +613,25 @@ namespace VRCX
                         return Encoding.ASCII.GetString((byte[])data);
 
                     case RegistryValueKind.DWord:
-                        return data;
+                        if (data.GetType() != typeof(long))
+                            return data;
+
+                        long.TryParse(data.ToString(), out var longValue);
+                        var bytes = BitConverter.GetBytes(longValue);
+                        var doubleValue = BitConverter.ToDouble(bytes, 0);
+                        return doubleValue;
                 }
             }
 
             return null;
         }
 
+        /// <summary>
+        /// Sets the value of the specified key in the VRChat group in the windows registry.
+        /// </summary>
+        /// <param name="key">The name of the key to set.</param>
+        /// <param name="value">The value to set for the specified key.</param>
+        /// <returns>True if the key was successfully set, false otherwise.</returns>
         public bool SetVRChatRegistryKey(string key, string value)
         {
             uint hash = 5381;
@@ -497,6 +666,11 @@ namespace VRCX
             return true;
         }
 
+        /// <summary>
+        /// Retrieves a dictionary of moderations for the specified user from the VRChat LocalPlayerModerations folder.
+        /// </summary>
+        /// <param name="currentUserId">The ID of the current user.</param>
+        /// <returns>A dictionary of moderations for the specified user, or null if the file does not exist.</returns>
         public Dictionary<string, short> GetVRChatModerations(string currentUserId)
         {
             var filePath = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData) + $@"Low\VRChat\VRChat\LocalPlayerModerations\{currentUserId}-show-hide-user.vrcset";
@@ -525,6 +699,12 @@ namespace VRCX
             return output;
         }
 
+        /// <summary>
+        /// Retrieves the moderation type for the specified user from the VRChat LocalPlayerModerations folder.
+        /// </summary>
+        /// <param name="currentUserId">The ID of the current user.</param>
+        /// <param name="userId">The ID of the user to retrieve the moderation type for.</param>
+        /// <returns>The moderation type for the specified user, or 0 if the file does not exist or the user is not found.</returns>
         public short GetVRChatUserModeration(string currentUserId, string userId)
         {
             var filePath = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData) + $@"Low\VRChat\VRChat\LocalPlayerModerations\{currentUserId}-show-hide-user.vrcset";
@@ -550,6 +730,13 @@ namespace VRCX
             return 0;
         }
 
+        /// <summary>
+        /// Sets the moderation type for the specified user in the VRChat LocalPlayerModerations folder.
+        /// </summary>
+        /// <param name="currentUserId">The ID of the current user.</param>
+        /// <param name="userId">The ID of the user to set the moderation type for.</param>
+        /// <param name="type">The moderation type to set for the specified user.</param>
+        /// <returns>True if the operation was successful, false otherwise.</returns>
         public bool SetVRChatUserModeration(string currentUserId, string userId, int type)
         {
             var filePath = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData) + $@"Low\VRChat\VRChat\LocalPlayerModerations\{currentUserId}-show-hide-user.vrcset";
@@ -583,6 +770,10 @@ namespace VRCX
             return true;
         }
 
+        /// <summary>
+        /// Sets whether or not the application should start up automatically with Windows.
+        /// </summary>
+        /// <param name="enabled">True to enable automatic startup, false to disable it.</param>
         public void SetStartup(bool enabled)
         {
             try
@@ -605,6 +796,22 @@ namespace VRCX
             }
         }
 
+        // what the fuck even is this
+        // refactor when
+        // #AppApiLivesDontMatter
+        public void SetAppLauncherSettings(bool enabled, bool killOnExit)
+        {
+            AutoAppLaunchManager.Instance.Enabled = enabled;
+            AutoAppLaunchManager.Instance.KillChildrenOnExit = killOnExit;
+        }
+
+        /// <summary>
+        /// Adds metadata to a PNG screenshot file and optionally renames the file to include the specified world ID.
+        /// </summary>
+        /// <param name="path">The path to the PNG screenshot file.</param>
+        /// <param name="metadataString">The metadata to add to the screenshot file.</param>
+        /// <param name="worldId">The ID of the world to associate with the screenshot.</param>
+        /// <param name="changeFilename">Whether or not to rename the screenshot file to include the world ID.</param>
         public void AddScreenshotMetadata(string path, string metadataString, string worldId, bool changeFilename = false)
         {
             var fileName = Path.GetFileNameWithoutExtension(path);
@@ -622,7 +829,10 @@ namespace VRCX
             ScreenshotHelper.WritePNGDescription(path, metadataString);
         }
 
-        // Create a function that opens a file dialog so a user can choose a .png file. Print the name of the file after it is chosen
+        /// <summary>
+        /// Opens a file dialog to select a PNG screenshot file.
+        /// The resulting file path is passed to <see cref="GetScreenshotMetadata(string)"/>.
+        /// </summary>
         public void OpenScreenshotFileDialog()
         {
             if (dialogOpen) return;
@@ -663,8 +873,15 @@ namespace VRCX
             thread.Start();
         }
 
+        /// <summary>
+        /// Retrieves metadata from a PNG screenshot file and send the result to displayScreenshotMetadata in app.js
+        /// </summary>
+        /// <param name="path">The path to the PNG screenshot file.</param>
         public void GetScreenshotMetadata(string path)
         {
+            if (string.IsNullOrEmpty(path))
+                return;
+
             var fileName = Path.GetFileNameWithoutExtension(path);
             var metadata = new JObject();
             if (File.Exists(path) && path.EndsWith(".png"))
@@ -692,7 +909,7 @@ namespace VRCX
                         }
                         catch (Exception ex)
                         {
-                            metadata.Add("error", $"This file contains invalid LFS/SSM metadata unable to be parsed by VRCX. \n({ex.Message})\n Text: {metadataString}");
+                            metadata.Add("error", $"This file contains invalid LFS/SSM metadata unable to be parsed by VRCX. \n({ex.Message})\nText: {metadataString}");
                         }
                     }
                     else
@@ -703,7 +920,7 @@ namespace VRCX
                         }
                         catch (JsonReaderException ex)
                         {
-                            metadata.Add("error", $"This file contains invalid metadata unable to be parsed by VRCX. \n({ex.Message})\n Text: {metadataString}");
+                            metadata.Add("error", $"This file contains invalid metadata unable to be parsed by VRCX. \n({ex.Message})\nText: {metadataString}");
                         }
                     }
                 }
@@ -741,11 +958,115 @@ namespace VRCX
             ExecuteAppFunction("displayScreenshotMetadata", metadata.ToString(Formatting.Indented));
         }
 
+        /// <summary>
+        /// Gets the last screenshot taken by VRChat and retrieves its metadata.
+        /// </summary>
+        public void GetLastScreenshot()
+        {
+            // Get the last screenshot taken by VRChat
+            var path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyPictures), "VRChat");
+            if (!Directory.Exists(path))
+                return;
+
+            var lastDirectory = Directory.GetDirectories(path).OrderByDescending(Directory.GetCreationTime).FirstOrDefault();
+            if (lastDirectory == null)
+                return;
+
+            var lastScreenshot = Directory.GetFiles(lastDirectory, "*.png").OrderByDescending(File.GetCreationTime).FirstOrDefault();
+            if (lastScreenshot == null)
+                return;
+
+            GetScreenshotMetadata(lastScreenshot);
+        }
+
+        /// <summary>
+        /// Copies an image file to the clipboard if it exists and is of a supported image file type.
+        /// </summary>
+        /// <param name="path">The path to the image file to copy to the clipboard.</param>
+        public void CopyImageToClipboard(string path)
+        {
+            // check if the file exists and is any image file type
+            if (File.Exists(path) && (path.EndsWith(".png") || path.EndsWith(".jpg") || path.EndsWith(".jpeg") || path.EndsWith(".gif") || path.EndsWith(".bmp") || path.EndsWith(".webp")))
+            {
+                MainForm.Instance.BeginInvoke(new MethodInvoker(() =>
+                {
+                    var image = Image.FromFile(path);
+                    Clipboard.SetImage(image);
+                }));
+            }
+        }
+
+        /// <summary>
+        /// Opens the folder containing user-defined shortcuts, if it exists.
+        /// </summary>
+        public void OpenShortcutFolder()
+        {
+            var path = AutoAppLaunchManager.Instance.AppShortcutDirectory;
+            if (!Directory.Exists(path))
+                return;
+
+            OpenFolderAndSelectItem(path, true);
+        }
+
+        /// <summary>
+        /// Opens the folder containing the specified file or folder path and selects the item in the folder.
+        /// </summary>
+        /// <param name="path">The path to the file or folder to select in the folder.</param>
+        /// <param name="isFolder">Whether the specified path is a folder or not. Defaults to false.</param>
+        public void OpenFolderAndSelectItem(string path, bool isFolder = false)
+        {
+            // I don't think it's quite meant for it, but SHOpenFolderAndSelectItems can open folders by passing the folder path as the item to select, as a child to itself, somehow. So we'll check to see if 'path' is a folder as well.
+            if (!File.Exists(path) && !Directory.Exists(path))
+                return;
+
+            var folderPath = isFolder ? path : Path.GetDirectoryName(path);
+            IntPtr pidlFolder;
+            IntPtr pidlFile;
+            uint psfgaoOut;
+
+            // Convert our managed strings to PIDLs. PIDLs are essentially pointers to the actual file system objects, separate from the "display name", which is the human-readable path to the file/folder. We're parsing the display name into a PIDL here.
+            // The windows shell uses PIDLs to identify objects in winapi calls, so we'll need to use them to open the folder and select the file. Cool stuff!
+            var result = WinApi.SHParseDisplayName(folderPath, IntPtr.Zero, out pidlFolder, 0, out psfgaoOut);
+            if (result != 0)
+            {
+                return;
+            }
+
+            result = WinApi.SHParseDisplayName(path, IntPtr.Zero, out pidlFile, 0, out psfgaoOut);
+            if (result != 0)
+            {
+                // Free the PIDL we allocated earlier if we failed to parse the display name of the file.
+                Marshal.FreeCoTaskMem(pidlFolder);
+                return;
+            }
+
+            IntPtr[] files = { pidlFile };
+
+            try
+            {
+                // Open the containing folder and select our file. SHOpenFolderAndSelectItems will respect existing explorer instances, open a new one if none exist, will properly handle paths > 120 chars, and work with third-party filesystem viewers that hook into winapi calls.
+                // It can select multiple items, but we only need to select one. 
+                WinApi.SHOpenFolderAndSelectItems(pidlFolder, (uint)files.Length, files, 0);
+            }
+            finally
+            {
+                // Free the PIDLs we allocated earlier
+                Marshal.FreeCoTaskMem(pidlFolder);
+                Marshal.FreeCoTaskMem(pidlFile);
+            }
+        }
+
+        /// <summary>
+        /// Flashes the window of the main form.
+        /// </summary>
         public void FlashWindow()
         {
             MainForm.Instance.BeginInvoke(new MethodInvoker(() => { WinformThemer.Flash(MainForm.Instance); }));
         }
 
+        /// <summary>
+        /// Sets the user agent string for the browser.
+        /// </summary>
         public void SetUserAgent()
         {
             using (var client = MainForm.Instance.Browser.GetDevToolsClient())

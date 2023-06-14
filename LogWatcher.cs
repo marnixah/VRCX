@@ -14,6 +14,9 @@ using CefSharp;
 
 namespace VRCX
 {
+    /// <summary>
+    /// Monitors the VRChat log files for changes and provides access to the log data.
+    /// </summary>
     public class LogWatcher
     {
         public static readonly LogWatcher Instance;
@@ -88,6 +91,9 @@ namespace VRCX
             }
         }
 
+        /// <summary>
+        /// Updates the log watcher by checking for new log files and updating the log list.
+        /// </summary>
         private void Update()
         {
             if (m_ResetLog)
@@ -157,6 +163,11 @@ namespace VRCX
             m_FirstRun = false;
         }
 
+        /// <summary>
+        /// Parses the log file starting from the current position and updates the log context.
+        /// </summary>
+        /// <param name="fileInfo">The file information of the log file to parse.</param>
+        /// <param name="logContext">The log context to update.</param>
         private void ParseLog(FileInfo fileInfo, LogContext logContext)
         {
             try
@@ -189,7 +200,7 @@ namespace VRCX
                             if (line.Length <= 36 ||
                                 line[31] != '-')
                             {
-                                ParseDesktopMode(fileInfo, line);
+                                ParseDesktopModeOld(fileInfo, line);
                                 continue;
                             }
 
@@ -220,11 +231,16 @@ namespace VRCX
                                     ParseLogAvatarPedestalChange(fileInfo, logContext, line, offset) ||
                                     ParseLogVideoError(fileInfo, logContext, line, offset) ||
                                     ParseLogVideoChange(fileInfo, logContext, line, offset) ||
+                                    ParseLogAVProVideoChange(fileInfo, logContext, line, offset) ||
                                     ParseLogUsharpVideoPlay(fileInfo, logContext, line, offset) ||
                                     ParseLogUsharpVideoSync(fileInfo, logContext, line, offset) ||
                                     ParseLogWorldVRCX(fileInfo, logContext, line, offset) ||
+                                    ParseLogWorldDataVRCX(fileInfo, logContext, line, offset) ||
                                     ParseLogOnAudioConfigurationChanged(fileInfo, logContext, line, offset) ||
-                                    ParseLogScreenshot(fileInfo, logContext, line, offset))
+                                    ParseLogScreenshot(fileInfo, logContext, line, offset) ||
+                                    ParseLogStringDownload(fileInfo, logContext, line, offset) ||
+                                    ParseLogImageDownload(fileInfo, logContext, line, offset) ||
+                                    ParseVoteKick(fileInfo, logContext, line, offset))
                                 {
                                 }
                             }
@@ -233,7 +249,8 @@ namespace VRCX
                                 if (ParseLogShaderKeywordsLimit(fileInfo, logContext, line, offset) ||
                                     ParseLogSDK2VideoPlay(fileInfo, logContext, line, offset) ||
                                     ParseApplicationQuit(fileInfo, logContext, line, offset) ||
-                                    ParseOpenVRInit(fileInfo, logContext, line, offset))
+                                    ParseOpenVRInit(fileInfo, logContext, line, offset) ||
+                                    ParseDesktopMode(fileInfo, logContext, line, offset))
                                 {
                                 }
                             }
@@ -466,6 +483,7 @@ namespace VRCX
             // 2021.04.06 11:25:45 Log        -  [Network Processing] RPC invoked ConfigurePortal on (Clone [1600004] Portals/PortalInternalDynamic) for Natsumi-sama
             // 2021.07.19 04:24:28 Log        -  [Behaviour] Will execute SendRPC/AlwaysBufferOne on (Clone [100004] Portals/PortalInternalDynamic) (UnityEngine.GameObject) for Natsumi-sama: S: "ConfigurePortal" I: 7 F: 0 B: 255 (local master owner)
             // 2022.07.29 18:40:37 Log        -  [Behaviour] Instantiated a (Clone [800004] Portals/PortalInternalDynamic)
+            // 2023 - deadge
 
             if (line.Contains("[Behaviour] Instantiated a (Clone [") && line.Contains("] Portals/PortalInternalDynamic)"))
             {
@@ -588,6 +606,19 @@ namespace VRCX
             return true;
         }
 
+        private bool ParseLogWorldDataVRCX(FileInfo fileInfo, LogContext logContext, string line, int offset)
+        {
+            // [VRCX-World] store:test:testvalue
+
+            if (string.Compare(line, offset, "[VRCX-World] ", 0, 13, StringComparison.Ordinal) != 0)
+                return false;
+
+            var data = line.Substring(offset + 13);
+
+            WorldDBManager.Instance.ProcessLogWorldDataRequest(data);
+            return true;
+        }
+
         private bool ParseLogVideoChange(FileInfo fileInfo, LogContext logContext, string line, int offset)
         {
             // 2021.04.20 13:37:69 Log        -  [Video Playback] Attempting to resolve URL 'https://www.youtube.com/watch?v=dQw4w9WgXcQ'
@@ -600,6 +631,31 @@ namespace VRCX
                 return false;
 
             var data = line.Substring(offset + 44);
+            data = data.Remove(data.Length - 1);
+
+            AppendLog(new[]
+            {
+                fileInfo.Name,
+                ConvertLogTimeToISO8601(line),
+                "video-play",
+                data
+            });
+
+            return true;
+        }
+
+        private bool ParseLogAVProVideoChange(FileInfo fileInfo, LogContext logContext, string line, int offset)
+        {
+            // 2023.05.12 15:53:48 Log        -  [Video Playback] Resolving URL 'rtspt://topaz.chat/live/kiriri520'
+
+            if (string.Compare(line, offset, "[Video Playback] Resolving URL '", 0, 32, StringComparison.Ordinal) != 0)
+                return false;
+
+            var pos = line.LastIndexOf("'");
+            if (pos < 0)
+                return false;
+
+            var data = line.Substring(offset + 32);
             data = data.Remove(data.Length - 1);
 
             AppendLog(new[]
@@ -898,7 +954,11 @@ namespace VRCX
         {
             // 2022.07.29 02:52:14 Log        -  OpenVR initialized!
 
-            if (string.Compare(line, offset, "OpenVR initialized!", 0, 19, StringComparison.Ordinal) != 0)
+            // 2023.04.22 16:52:28 Log        -  Initializing VRSDK.
+            // 2023.04.22 16:52:29 Log        -  StartVRSDK: Open VR Loader
+
+            if (string.Compare(line, offset, "OpenVR initialized!", 0, 19, StringComparison.Ordinal) != 0 &&
+                string.Compare(line, offset, "Initializing VRSDK.", 0, 19, StringComparison.Ordinal) != 0)
                 return false;
 
             AppendLog(new[]
@@ -911,7 +971,24 @@ namespace VRCX
             return true;
         }
 
-        private bool ParseDesktopMode(FileInfo fileInfo, string line)
+        private bool ParseDesktopMode(FileInfo fileInfo, LogContext logContext, string line, int offset)
+        {
+            // 2023.04.22 16:54:18 Log        -  VR Disabled
+
+            if (string.Compare(line, offset, "VR Disabled", 0, 11, StringComparison.Ordinal) != 0)
+                return false;
+
+            AppendLog(new[]
+            {
+                fileInfo.Name,
+                ConvertLogTimeToISO8601(line),
+                "desktop-mode"
+            });
+
+            return true;
+        }
+
+        private bool ParseDesktopModeOld(FileInfo fileInfo, string line)
         {
             //    XR Device: None
 
@@ -925,6 +1002,78 @@ namespace VRCX
                 "desktop-mode"
             });
 
+            return true;
+        }
+
+        private bool ParseLogStringDownload(FileInfo fileInfo, LogContext logContext, string line, int offset)
+        {
+            // 2023.03.23 11:37:21 Log        -  [String Download] Attempting to load String from URL 'https://pastebin.com/raw/BaW6NL2L'
+            var check = "] Attempting to load String from URL '";
+            if (!line.Contains(check))
+                return false;
+
+            var lineOffset = line.LastIndexOf(check);
+            if (lineOffset < 0)
+                return true;
+
+            var stringData = line.Substring(lineOffset + check.Length);
+            stringData = stringData.Remove(stringData.Length - 1);
+
+            if (stringData.StartsWith("http://127.0.0.1:22500") || stringData.StartsWith("http://localhost:22500"))
+                return true; // ignore own requests
+            
+            AppendLog(new[]
+            {
+                fileInfo.Name,
+                ConvertLogTimeToISO8601(line),
+                "resource-load-string",
+                stringData
+            });
+            return true;
+        }
+
+        private bool ParseLogImageDownload(FileInfo fileInfo, LogContext logContext, string line, int offset)
+        {
+            // 2023.03.23 11:32:25 Log        -  [Image Download] Attempting to load image from URL 'https://i.imgur.com/lCfUMX0.jpeg'
+            var check = "] Attempting to load image from URL '";
+            if (!line.Contains(check))
+                return false;
+
+            var lineOffset = line.LastIndexOf(check);
+            if (lineOffset < 0)
+                return true;
+
+            var imageData = line.Substring(lineOffset + check.Length);
+            imageData = imageData.Remove(imageData.Length - 1);
+            
+            if (imageData.StartsWith("http://127.0.0.1:22500") || imageData.StartsWith("http://localhost:22500"))
+                return true; // ignore own requests
+            
+            AppendLog(new[]
+            {
+                fileInfo.Name,
+                ConvertLogTimeToISO8601(line),
+                "resource-load-image",
+                imageData
+            });
+            return true;
+        }
+        
+        private bool ParseVoteKick(FileInfo fileInfo, LogContext logContext, string line, int offset)
+        {
+            // 2023.06.02 01:08:04 Log        -  [Behaviour] Received executive message: You have been kicked from the instance by majority vote
+            // 2023.06.02 01:11:58 Log        -  [Behaviour] You have been kicked from this world for an hour.
+
+            if (string.Compare(line, offset, "[Behaviour] Received executive message: ", 0, 40, StringComparison.Ordinal) != 0)
+                return false;
+
+            AppendLog(new[]
+            {
+                fileInfo.Name,
+                ConvertLogTimeToISO8601(line),
+                "event",
+                line.Substring(offset + 40)
+            });
             return true;
         }
 

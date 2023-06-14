@@ -73,6 +73,9 @@
                 "sort_update": "Sort by update",
                 "sort_created": "Sort by created"
             },
+            "group": {
+                "header": "Group"
+            },
             "prev_page": "Prev",
             "next_page": "Next"
         },
@@ -89,6 +92,8 @@
             "avatars": {
                 "header": "Avatars"
             },
+            "bulk_unfavorite_mode": "Bulk Unfavorite Mode",
+            "bulk_unfavorite_selection": "Bulk Unfavorite Selection",
             "refresh_tooltip": "Refresh all favorites",
             "export": "Export",
             "import": "Import",
@@ -202,6 +207,10 @@
                     "minimized": "Start as minimized state",
                     "tray": "Close to tray"
                 },
+                "game_log": {
+                    "header": "Game Log",
+                    "resource_load": "Log Udon resource load"
+                },
                 "legal_notice": {
                     "header": "Legal Notice",
                     "info": "VRCX is an assistant application for VRChat that provides information about and managing friendship. This application makes use of the unofficial VRChat API SDK.",
@@ -218,6 +227,9 @@
                     "theme_mode_system": "System",
                     "theme_mode_light": "Light",
                     "theme_mode_dark": "Dark",
+                    "theme_mode_darkvanilla": "Dark Vanilla",
+                    "theme_mode_pink": "Pink",
+                    "theme_mode_material3": "Material 3",
                     "vrcplus_profile_icons": "VRCPlus Profile Icons",
                     "disable_tooltips": "Disable Tooltips",
                     "sort_favorite_by": "Sort Favorites by",
@@ -385,7 +397,7 @@
                         "header": "Progress pie overlay for videos",
                         "enable": "Enable",
                         "enable_tooltip": "Requires SteamVR overlay to be enabled",
-                        "dance_world_only": "Dance worlds only"
+                        "dance_world_only": "Supported world only"
                     },
                     "screenshot_helper": {
                         "header": "Screenshot Helper",
@@ -395,13 +407,25 @@
                         "modify_filename": "Modify Filename",
                         "modify_filename_tooltip": "Will add the World ID to screenshot filename, in addition to file metadata."
                     },
+                    "app_launcher": {
+                        "header": "App Launcher",
+                        "folder": "Auto-Launch Folder",
+                        "folder_tooltip": "To auto-launch apps with VRChat, place shortcuts in this folder.",
+                        "enable": "Enable",
+                        "auto_close": "Auto close apps"
+                    },
                     "cache_debug": {
                         "header": "VRCX Instance Cache/Debug",
+                        "udon_exception_logging": "Udon Exception Logging",
+                        "gpu_fix": "SteamVR Overlay GPU Fix",
+                        "gpu_fix_notice": "(requires restart)",
+                        "gpu_fix_warning": "Only enable this option if the SteamVR overlay isn't working and you have 2 GPUs",
                         "disable_gamelog": "Disable GameLog",
                         "disable_gamelog_notice": "(will likely break things)",
                         "user_cache": "User cache:",
                         "world_cache": "World cache:",
                         "avatar_cache": "Avatar cache:",
+                        "group_cache": "Group cache:",
                         "avatar_name_cache": "Avatar Name cache:",
                         "clear_cache": "Clear Cache",
                         "auto_clear_cache": "Auto Clear Cache",
@@ -458,7 +482,8 @@
         "search_result_more": "Search More:",
         "direct_access_tooltip": "Direct access ID/URL from clipboard",
         "refresh_tooltip": "Refresh friends",
-        "friends": "FRIENDS",
+        "groups": "Groups",
+        "friends": "Friends",
         "me": "ME",
         "favorite": "FAVORITES",
         "online": "ONLINE",
@@ -543,7 +568,8 @@
                 "avatar_cloning_allow": "Allowed",
                 "avatar_cloning_deny": "Deny",
                 "home_location": "Home Location",
-                "accuracy_notice": "Info from local database may not be accurate"
+                "accuracy_notice": "Info from local database may not be accurate",
+                "instance_full": "full"
             },
             "groups": {
                 "header": "Groups",
@@ -608,6 +634,7 @@
                 "capacity_count": "Capacity {count} ({max})",
                 "self_invite_tooltip": "Invite Yourself",
                 "refresh_user_count_tooltip": "Refresh User Count",
+                "instance_full": "full",
                 "instance_creator": "Instance Creator"
             },
             "info": {
@@ -679,7 +706,8 @@
                 "platform": "Platform"
             },
             "json": {
-                "header": "JSON"
+                "header": "JSON",
+                "file_analysis": "File Analysis"
             }
         },
         "group": {
@@ -717,7 +745,9 @@
             },
             "info": {
                 "header": "Info",
+                "instances": "Instances",
                 "announcement": "Announcement",
+                "instance_full": "full",
                 "rules": "Rules",
                 "members": "Members",
                 "created_at": "Created At",
@@ -728,6 +758,7 @@
                 "id_tooltip": "Copy ID to clipboard",
                 "joined_at": "Joined At",
                 "roles": "Roles",
+                "role": "Role:",
                 "role_description": "Description:",
                 "role_updated_at": "Updated At:",
                 "role_created_at": "Created At:",
@@ -737,7 +768,18 @@
                 "header": "Members",
                 "all_members": "All Members",
                 "friends_only": "Friends Only",
-                "load_more": "Load more..."
+                "load_more": "Load more...",
+                "sort_by": "Sort By:",
+                "sorting": {
+                    "user_id": "User ID (Ascending)",
+                    "joined_at_asc": "Joined At (Ascending)",
+                    "joined_at_desc": "Joined At (Descending)"
+                },
+                "filter": "Filter:",
+                "filters": {
+                    "everyone": "Everyone",
+                    "users_with_no_role": "Users With No Role"
+                }
             },
             "gallery": {
                 "header": "Gallery"
@@ -785,6 +827,10 @@
             "access_type_friend": "Friends",
             "access_type_invite_plus": "Invite+",
             "access_type_invite": "Invite",
+            "group_access_type": "Group Access",
+            "group_access_type_members": "Members",
+            "group_access_type_plus": "Plus",
+            "group_access_type_public": "Public",
             "region": "Region",
             "region_usw": "US West",
             "region_use": "US East",
@@ -795,16 +841,23 @@
             "instance_id_placeholder": "Random",
             "instance_creator": "Instance Creator",
             "instance_creator_placeholder": "Choose User",
-            "group_id": "Group ID",
+            "group_placeholder": "Choose Group",
+            "role_placeholder": "Choose Roles",
+            "group_id": "Group",
             "location": "Location",
             "url": "URL",
             "copy_url": "Copy URL",
             "self_invite": "Self invite",
             "invite": "Invite",
-            "launch": "Launch"
+            "launch": "Launch",
+            "create_instance": "Create Instance",
+            "queueEnabled": "Queue",
+            "normal": "Normal",
+            "group": "Group",
+            "roles": "Roles"
         },
         "launch_options": {
-            "header": "Launch Options",
+            "header": "VRChat Launch Options",
             "description": "These options are for advanced users only.",
             "example": "to change max fps: --fps=<N> e.g.)",
             "path_override": "VRChat Path Override",
@@ -874,7 +927,9 @@
             "launch": "Launch"
         },
         "export_friends_list": {
-            "header": "Export Friends List"
+            "header": "Export Friends List",
+            "csv": "CSV",
+            "json": "JSON"
         },
         "export_own_avatars": {
             "header": "Export Own Avatars"
@@ -1051,6 +1106,7 @@
         },
         "change_log": {
             "header": "Change Log",
+            "description": "Consider donating to support future development of VRCX",
             "close": "Close",
             "donate": "Donate",
             "github": "GitHub"
@@ -1074,7 +1130,11 @@
         },
         "screenshot_metadata": {
             "header": "Screenshot Metadata",
+            "drag": "Drag and drop a screenshot here",
             "browse": "Browse",
+            "last_screenshot": "Last Screenshot",
+            "copy_image": "Copy Image",
+            "open_folder": "Open Folder",
             "upload": "Upload"
         }
     },
@@ -1301,7 +1361,8 @@
             "type": "Type",
             "icon": "Icons",
             "user": "User",
-            "detail": "Detail"
+            "detail": "Detail",
+            "action": "Action"
         },
         "playerList": {
             "avatar": "Avatar",
