@@ -9813,19 +9813,6 @@ speechSynthesis.getVoices();
                 }
                 break;
             case 'vrcx':
-                // VideoPlay(PyPyDance) "https://jd.pypy.moe/api/v1/videos/jr1NX4Jo8GE.mp4",0.1001,239.606,"0905 : [J-POP] 【まなこ】金曜日のおはよう 踊ってみた (vernities)"
-                var type = gameLog.data.substr(0, gameLog.data.indexOf(' '));
-                if (type === 'VideoPlay(PyPyDance)') {
-                    this.addGameLogPyPyDance(gameLog, location);
-                } else if (type === 'VideoPlay(VRDancing)') {
-                    this.addGameLogVRDancing(gameLog, location);
-                } else if (type === 'VideoPlay(ZuwaZuwaDance)') {
-                    this.addGameLogZuwaZuwaDance(gameLog, location);
-                } else if (type === 'LSMedia') {
-                    this.addGameLogLSMedia(gameLog, location);
-                } else if (type === 'Movie&Chill') {
-                    this.addGameLogMovieAndChill(gameLog, location);
-                }
                 break;
             case 'photon-id':
                 if (!this.isGameRunning || !this.friendLogInitStatus) {
